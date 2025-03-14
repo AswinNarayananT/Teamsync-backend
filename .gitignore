@@ -1,0 +1,49 @@
+# Python related
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env
+*.env
+*.log
+
+# Django related
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+*.pyc
+*.pyo
+.DS_Store
+
+# Migrations (Keep the __init__.py but ignore other migrations)
+**/migrations/*.py
+!**/migrations/__init__.py
+
+# VS Code and JetBrains IDEs
+.vscode/
+.idea/
+*.swp
+
+# Node Modules (if frontend exists inside the backend project)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Docker
+*.pid
+*.log
+__pycache__/
+.dockerignore
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Coverage reports
+htmlcov/
+.coverage
+*.cover
+.hypothesis/
