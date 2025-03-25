@@ -4,28 +4,37 @@ from django.contrib.auth import authenticate
 from django.core.mail import send_mail
 from rest_framework import serializers
 import hashlib
-import random
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import get_user_model
 
+
+User = get_user_model()
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     class Meta:
-        model =Accounts
-        fields = ["email","first_name","last_name","phone_number","password"]
-        extra_kwargs = {"password":{"write_only":True}}
+        model = Accounts
+        fields = ["email", "first_name", "last_name", "phone_number", "password"]
+        extra_kwargs = {"password": {"write_only": True}}
 
     def create(self, validated_data):
+        """Create a new user or resend OTP if the user already exists."""
+        if self.context.get("resend_otp"):
+            user = Accounts.objects.get(email=validated_data["email"])
+        else:
+            password = validated_data.pop("password")
+            user = Accounts.objects.create(**validated_data)
+            user.set_password(password)
+            user.is_active = False
+            user.save()
 
-        password =validated_data.pop("password")
-        user =Accounts.objects.create(password=password,**validated_data)
-        user.is_active =False
-        user.save()
-
+        # ✅ Send OTP
         otp = OTPVerification.generate_otp()
         otp_hash = hashlib.sha256(otp.encode()).hexdigest()
 
-        OTPVerification.objects.filter(user=user).delete()
+        OTPVerification.objects.filter(user=user).delete()  # Remove old OTPs
         OTPVerification.objects.create(user=user, otp_hash=otp_hash)
-        print(f"OTP for {user.email}: {otp}")
+
+        print(f"{otp} for the user {user.first_name}")
 
         send_mail(
             subject="Your OTP for Team Sync",
@@ -34,7 +43,12 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             recipient_list=[user.email],
         )
 
-        return user   
+        return user
+
+
+
+
+
 
 
 class OTPVerificationSerializer(serializers.Serializer):
@@ -47,11 +61,11 @@ class OTPVerificationSerializer(serializers.Serializer):
 
         try:
             user = Accounts.objects.get(email=email)
-            otp_entry = OTPVerification.objects.filter(user=user).latest('created_at')
+            otp_entry = OTPVerification.objects.filter(user=user).latest("created_at")
         except (Accounts.DoesNotExist, OTPVerification.DoesNotExist):
             raise serializers.ValidationError("Invalid email or OTP.")
 
-        if not otp_entry.is_valid:
+        if not otp_entry.is_valid(otp):
             raise serializers.ValidationError("OTP has expired.")
 
         if otp_entry.otp_hash != hashlib.sha256(otp.encode()).hexdigest():
@@ -59,7 +73,12 @@ class OTPVerificationSerializer(serializers.Serializer):
             otp_entry.save()
             raise serializers.ValidationError("Invalid OTP.")
 
+        user.otp_verified = True
+        user.is_active = True  
+        user.save()
+
         otp_entry.delete()
+
         return {"message": "OTP verified successfully", "user_id": user.id}
 
 
@@ -77,6 +96,8 @@ class ResendOTPSerializer(serializers.Serializer):
         otp = OTPVerification.generate_otp()
         otp_hash = hashlib.sha256(otp.encode()).hexdigest()
         OTPVerification.objects.create(user=user, otp_hash=otp_hash)
+
+        print(f"OTP for {user.email}: {otp}")
 
         send_mail(
             subject="Resend OTP for Team Sync",
@@ -104,6 +125,26 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError("Account is inactive.")
         
         if user.is_blocked:
-            raise serializers.ValidationError("Account is Blocked.")
+            raise serializers.ValidationError("Account is blocked.")
 
-        return {"message": "Login successful", "user_id": user.id}
+        refresh = RefreshToken.for_user(user)
+        access = refresh.access_token
+
+        return {
+            "message": "Login successful",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "is_superuser":user.is_superuser
+            },
+            "access_token": str(access),  
+            "refresh_token": str(refresh),
+        }
+
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Accounts
+        exclude = ["password"]     

@@ -15,9 +15,15 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
+from accounts.views import CookieTokenRefreshView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    
+    path('api/v1/token/refresh/', CookieTokenRefreshView.as_view(), name="token_refresh"),
+    path('api/v1/accounts/', include('accounts.urls')), 
+    path('api/v1/adminpanel/', include('adminpanel.urls')), 
+    path('api/v1/workspace/', include('workspace.urls')), 
+    path('api-auth/v1/', include("rest_framework.urls")),
+
 ]
