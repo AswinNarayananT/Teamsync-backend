@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.utils.timezone import now
 from datetime import timedelta
 from adminpanel.models import Plan
+import uuid
 
 # Create your models here.
 
@@ -95,6 +96,7 @@ class WorkspaceInvitation(models.Model):
     invited_by = models.ForeignKey(User, on_delete=models.CASCADE)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="developer") 
     accepted = models.BooleanField(default=False)
+    token = models.UUIDField(default=uuid.uuid4, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

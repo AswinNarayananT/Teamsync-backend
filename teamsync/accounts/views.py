@@ -1,21 +1,19 @@
 from .serializers import UserRegisterSerializer,LoginSerializer,ResendOTPSerializer,OTPVerificationSerializer,UserSerializer
-from .models import Accounts,OTPVerification
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework.permissions import AllowAny,IsAuthenticated
-from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
+from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from rest_framework.response import Response
-from datetime import datetime, timedelta
+from .models import Accounts,OTPVerification
 from rest_framework.views import APIView
 from django.core.mail import send_mail
 from django.utils.timezone import now
 from rest_framework import status
 from django.conf import settings
+from datetime import timedelta
 import requests
 import hashlib
-
-
-
 
 
 
@@ -40,6 +38,7 @@ class RegisterView(APIView):
                 return Response({"error": "Try another login method."}, status=status.HTTP_400_BAD_REQUEST)
             else:
                 otp = OTPVerification.generate_otp()
+                print(otp)
                 otp_hash = hashlib.sha256(otp.encode()).hexdigest()
 
                 OTPVerification.objects.filter(user=existing_user).delete()
@@ -77,6 +76,7 @@ class ResendOTPView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        print("its comming")
         serializer = ResendOTPSerializer(data=request.data)
         if serializer.is_valid():
             return Response(serializer.validated_data, status=status.HTTP_200_OK)
@@ -111,8 +111,6 @@ class LoginView(APIView):
                 expires=now() + timedelta(days=1),
             )
 
-            print(f"Set-Cookie Header: {response.headers.get('Set-Cookie')}") 
-
             return response
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -127,12 +125,6 @@ class ProtectedUserView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
     
 
-from datetime import timedelta
-from django.utils.timezone import now
-from rest_framework_simplejwt.views import TokenRefreshView
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer
-from rest_framework.response import Response
-from rest_framework import status
 
 class CookieTokenRefreshView(TokenRefreshView):
     def post(self, request, *args, **kwargs):
@@ -144,20 +136,12 @@ class CookieTokenRefreshView(TokenRefreshView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-
         serializer = TokenRefreshSerializer(data={"refresh": refresh_token})
-        print(serializer)
+
         if not serializer.is_valid():
             print("Token refresh serializer errors:", serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        # try:
-        #     serializer.is_valid(raise_exception=True)
-        # except Exception as e:
-        #     print("Token refresh serializer errors:", serializer.errors)
-        #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
-        print("akgjlk")
         data = serializer.validated_data
         response = Response(data, status=status.HTTP_200_OK)
 
@@ -168,12 +152,9 @@ class CookieTokenRefreshView(TokenRefreshView):
                 httponly=True,
                 secure=True,
                 samesite="None",
-                expires=now() + timedelta(minutes=1),  # adjust expiry as needed
+                expires=now() + timedelta(minutes=1), 
             )
         return response
-
-
-    
 
 
 class GoogleLoginView(APIView):
@@ -181,8 +162,6 @@ class GoogleLoginView(APIView):
 
     def post(self, request):
         google_credential = request.data.get("credential")
-
-        print("🔍 Received Google Credential (Access Token):", google_credential)
 
         if not google_credential:
             return Response({"error": "No credential received"}, status=status.HTTP_400_BAD_REQUEST)
@@ -192,12 +171,10 @@ class GoogleLoginView(APIView):
         user_response = requests.get(user_info_url, headers=headers)
         user_info = user_response.json()
 
-        print("🔍 Google User Info:", user_info)
 
         if "email" not in user_info:
             return Response({"error": "Failed to retrieve user information"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check if user exists or create a new one
         user, created = Accounts.objects.get_or_create(
             email=user_info["email"],
             defaults={
@@ -208,8 +185,6 @@ class GoogleLoginView(APIView):
                 "is_active": True,
             },
         )
-        # user.is_active=True
-        # user.save()
 
         refresh = RefreshToken.for_user(user)
         access = refresh.access_token
@@ -221,16 +196,7 @@ class GoogleLoginView(APIView):
                 "email": user.email,
                 "first_name": user.first_name,
                 "last_name": user.last_name,
-                # "profile_picture": user.profile_picture,
-                # "phone_number": user.phone_number, 
-                # "otp_verified": user.otp_verified,
-                # "google_verified": user.google_verified,
-                # "is_active": user.is_active,
-                # "is_blocked": user.is_blocked,
-                # "is_staff": user.is_staff,
                 "is_superuser": user.is_superuser,
-                # "date_joined": user.date_joined,
-                # "last_login": user.last_login,
             },
             "access_token": str(access),  
             "refresh_token": str(refresh),
@@ -255,21 +221,7 @@ class GoogleLoginView(APIView):
             samesite="None",
             expires=now() + timedelta(days=1),
         )
-        
-        # response.set_cookie(
-        #     key="access",
-        #     value=str(access),
-        #     httponly=True,
-        #     secure=not settings.DEBUG,
-        #     samesite="Lax",
-        # )
-        # response.set_cookie(
-        #     key="refresh",
-        #     value=str(refresh),
-        #     httponly=True,
-        #     secure=not settings.DEBUG,
-        #     samesite="Lax",
-        # )
+
 
         return response
 
@@ -283,7 +235,6 @@ class LogoutView(APIView):
         if refresh_token:
             try:
                 token = RefreshToken(refresh_token)
-                print("token blacklisted")
                 token.blacklist() 
             except Exception as e:
                 print("Token blacklisting error:", e)

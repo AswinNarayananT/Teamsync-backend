@@ -17,7 +17,6 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         extra_kwargs = {"password": {"write_only": True}}
 
     def create(self, validated_data):
-        """Create a new user or resend OTP if the user already exists."""
         if self.context.get("resend_otp"):
             user = Accounts.objects.get(email=validated_data["email"])
         else:
@@ -27,14 +26,12 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             user.is_active = False
             user.save()
 
-        # ✅ Send OTP
         otp = OTPVerification.generate_otp()
+        print(otp)
         otp_hash = hashlib.sha256(otp.encode()).hexdigest()
 
-        OTPVerification.objects.filter(user=user).delete()  # Remove old OTPs
+        OTPVerification.objects.filter(user=user).delete() 
         OTPVerification.objects.create(user=user, otp_hash=otp_hash)
-
-        print(f"{otp} for the user {user.first_name}")
 
         send_mail(
             subject="Your OTP for Team Sync",
@@ -44,10 +41,6 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         )
 
         return user
-
-
-
-
 
 
 
@@ -87,6 +80,7 @@ class ResendOTPSerializer(serializers.Serializer):
 
     def validate(self, data):
         email = data.get("email")
+        print(email)
         try:
             user = Accounts.objects.get(email=email)
         except Accounts.DoesNotExist:
