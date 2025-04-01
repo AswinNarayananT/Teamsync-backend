@@ -5,7 +5,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from rest_framework.response import Response
-from .models import Accounts,OTPVerification
+from .models import Accounts
 from rest_framework.views import APIView
 from django.core.mail import send_mail
 from django.utils.timezone import now
@@ -14,6 +14,9 @@ from django.conf import settings
 from datetime import timedelta
 import requests
 import hashlib
+import random
+import redis
+from .tasks import send_otp_email  
 
 
 
@@ -37,23 +40,10 @@ class RegisterView(APIView):
             elif existing_user.google_verified:
                 return Response({"error": "Try another login method."}, status=status.HTTP_400_BAD_REQUEST)
             else:
-                otp = OTPVerification.generate_otp()
-                print(otp)
-                otp_hash = hashlib.sha256(otp.encode()).hexdigest()
-
-                OTPVerification.objects.filter(user=existing_user).delete()
-                OTPVerification.objects.create(user=existing_user, otp_hash=otp_hash)
-
-
-                send_mail(
-                    subject="Your OTP for Team Sync",
-                    message=f"Your OTP code is: {otp}. It is valid for 2 minutes.",
-                    from_email="noreply@teamsync.com",
-                    recipient_list=[existing_user.email],
-                )
+                send_otp_email.delay(existing_user.id, existing_user.email)
 
                 return Response({"otp_verification": "OTP sent again. Please verify your email."}, status=status.HTTP_200_OK)
-
+        print("data",request.data)
         serializer = UserRegisterSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -102,15 +92,6 @@ class LoginView(APIView):
                 expires=now() + timedelta(minutes=1),
             )
 
-            response.set_cookie(
-                key="refresh",
-                value=data["refresh_token"],
-                httponly=True,
-                secure=True,  
-                samesite="None",
-                expires=now() + timedelta(days=1),
-            )
-
             return response
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -128,11 +109,12 @@ class ProtectedUserView(APIView):
 
 class CookieTokenRefreshView(TokenRefreshView):
     def post(self, request, *args, **kwargs):
-        refresh_token = request.COOKIES.get("refresh")
+        refresh_token = request.data.get("refresh")  
+        
         if not refresh_token:
-            print("Refresh token not provided in cookie.")
+            print("Refresh token not provided in request body.")
             return Response(
-                {"detail": "Refresh token not provided in cookie."},
+                {"detail": "Refresh token not provided."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -213,16 +195,6 @@ class GoogleLoginView(APIView):
             expires=now() + timedelta(minutes=1),
         )
 
-        response.set_cookie(
-            key="refresh",
-            value=str(refresh),
-            httponly=True,
-            secure=True,  
-            samesite="None",
-            expires=now() + timedelta(days=1),
-        )
-
-
         return response
 
 
@@ -230,7 +202,7 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        refresh_token = request.COOKIES.get("refresh")
+        refresh_token = request.data.get("refresh")
 
         if refresh_token:
             try:
@@ -241,7 +213,8 @@ class LogoutView(APIView):
 
         response = Response({"message": "Logout successful"}, status=status.HTTP_200_OK)
 
+        # Clear access and refresh tokens from cookies
         response.set_cookie("access", "", max_age=0, httponly=True, samesite="None", secure=True)
-        response.set_cookie("refresh", "", max_age=0, httponly=True, samesite="None", secure=True)
 
         return response
+

@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from datetime import timedelta
 from decouple import config
 from pathlib import Path
+from celery import Celery
 import stripe
 import os
 
@@ -154,6 +155,32 @@ STRIPE_SECRET_KEY = config("STRIPE_SECRET_KEY")
 STRIPE_PUBLIC_KEY = config("STRIPE_PUBLIC_KEY")
 
 stripe.api_key = STRIPE_SECRET_KEY
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1", 
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
+}
+
+
+
+
+app = Celery('demo')
+app.conf.update(
+    worker_force_execv=False 
+)
+
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+
+# Celery Configuration
+CELERY_BROKER_URL = "redis://localhost:6379/0"  
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
 
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

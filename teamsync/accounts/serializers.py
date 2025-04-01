@@ -6,6 +6,15 @@ from rest_framework import serializers
 import hashlib
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
+from accounts.tasks import send_otp_email
+import redis
+from django.core.exceptions import ValidationError
+from rest_framework import serializers
+from accounts.models import Accounts
+
+# Redis client
+redis_client = redis.StrictRedis(host="localhost", port=6379, db=0, decode_responses=True)
+
 
 
 User = get_user_model()
@@ -26,20 +35,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             user.is_active = False
             user.save()
 
-        otp = OTPVerification.generate_otp()
-        print(otp)
-        otp_hash = hashlib.sha256(otp.encode()).hexdigest()
-
-        OTPVerification.objects.filter(user=user).delete() 
-        OTPVerification.objects.create(user=user, otp_hash=otp_hash)
-
-        send_mail(
-            subject="Your OTP for Team Sync",
-            message=f"Your OTP code is: {otp}. It is valid for 2 minutes.",
-            from_email="noreply@teamsync.com",
-            recipient_list=[user.email],
-        )
-
+        send_otp_email.delay(user.id, user.email)
         return user
 
 
@@ -54,23 +50,27 @@ class OTPVerificationSerializer(serializers.Serializer):
 
         try:
             user = Accounts.objects.get(email=email)
-            otp_entry = OTPVerification.objects.filter(user=user).latest("created_at")
-        except (Accounts.DoesNotExist, OTPVerification.DoesNotExist):
+        except Accounts.DoesNotExist:
             raise serializers.ValidationError("Invalid email or OTP.")
 
-        if not otp_entry.is_valid(otp):
-            raise serializers.ValidationError("OTP has expired.")
+        # Fetch the OTP hash from Redis
+        otp_key = f"otp:{user.id}"
+        stored_otp_hash = redis_client.get(otp_key)
 
-        if otp_entry.otp_hash != hashlib.sha256(otp.encode()).hexdigest():
-            otp_entry.attempts += 1
-            otp_entry.save()
+        if not stored_otp_hash:
+            raise serializers.ValidationError("OTP has expired or is invalid.")
+
+        # Verify the OTP hash
+        if stored_otp_hash != hashlib.sha256(otp.encode()).hexdigest():
             raise serializers.ValidationError("Invalid OTP.")
 
+        # OTP is correct, activate the user
         user.otp_verified = True
         user.is_active = True  
         user.save()
 
-        otp_entry.delete()
+        # Delete OTP from Redis after successful verification
+        redis_client.delete(otp_key)
 
         return {"message": "OTP verified successfully", "user_id": user.id}
 
@@ -86,19 +86,7 @@ class ResendOTPSerializer(serializers.Serializer):
         except Accounts.DoesNotExist:
             raise serializers.ValidationError("User with this email does not exist.")
 
-        OTPVerification.objects.filter(user=user).delete()  
-        otp = OTPVerification.generate_otp()
-        otp_hash = hashlib.sha256(otp.encode()).hexdigest()
-        OTPVerification.objects.create(user=user, otp_hash=otp_hash)
-
-        print(f"OTP for {user.email}: {otp}")
-
-        send_mail(
-            subject="Resend OTP for Team Sync",
-            message=f"Your new OTP code is: {otp}. It is valid for 2 minutes.",
-            from_email="noreply@teamsync.com",
-            recipient_list=[user.email],
-        )
+        send_otp_email.delay(user.id, user.email)
 
         return {"message": "OTP has been resent to your email."}
 
@@ -110,10 +98,23 @@ class LoginSerializer(serializers.Serializer):
     def validate(self, data):
         email = data.get("email")
         password = data.get("password")
+
+        if email is None or password is None: 
+            raise serializers.ValidationError("Invalid email or password.")
+        
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Invalid email or password.")
+
+        if user.google_verified and not user.password:
+            raise serializers.ValidationError("This email is registered with Google. Please log in using Google Sign-In.")
+
         user = authenticate(email=email, password=password)
 
         if user is None:
             raise serializers.ValidationError("Invalid email or password.")
+        
 
         if not user.is_active:
             raise serializers.ValidationError("Account is inactive.")

@@ -72,6 +72,7 @@ class WorkspaceMember(models.Model):
         ("owner", "Owner"),
         ("manager", "Manager"),
         ("developer", "Developer"),
+        ("designer", "Designer"),
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="members")
@@ -89,6 +90,7 @@ class WorkspaceInvitation(models.Model):
     ROLE_CHOICES = [
         ("manager", "Manager"),
         ("developer", "Developer"),
+        ("designer", "Designer"),
     ]
 
     email = models.EmailField()
