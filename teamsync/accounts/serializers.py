@@ -108,7 +108,7 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError("Invalid email or password.")
 
         if user.google_verified and not user.password:
-            raise serializers.ValidationError("This email is registered with Google. Please log in using Google Sign-In.")
+            raise serializers.ValidationError("Use Google Sign-In for this account.")
 
         user = authenticate(email=email, password=password)
 

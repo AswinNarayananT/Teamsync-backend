@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions
 from .models import Workspace, WorkspaceMember
 from rest_framework.response import Response
-from .serializers import WorkspaceSerializer
+from .serializers import WorkspaceSerializer, WorkspaceMemberSerializer
 from django.utils.timezone import now
 from adminpanel.models import Plan
 from rest_framework import status
@@ -19,7 +19,7 @@ class UserWorkspacesView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
 
-        member_workspaces = Workspace.objects.filter(members__user=user)
+        member_workspaces = Workspace.objects.filter(members__user=user).order_by("-members__joined_at").distinct()
 
         return member_workspaces.distinct()
 
@@ -217,3 +217,17 @@ class AcceptInviteView(APIView):
 
         except WorkspaceInvitation.DoesNotExist:
             return Response({"error": "Invalid or expired invitation"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class WorkspaceMembersListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, workspace_id):
+        try:
+            workspace = Workspace.objects.get(id=workspace_id)
+        except Workspace.DoesNotExist:
+            return Response({"error": "Workspace not found"}, status=404)
+
+        members = WorkspaceMember.objects.filter(workspace=workspace).select_related("user")
+        serializer = WorkspaceMemberSerializer(members, many=True)
+        return Response({"members": serializer.data})
