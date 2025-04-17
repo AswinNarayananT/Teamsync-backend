@@ -30,8 +30,12 @@ class Workspace(models.Model):
     workspace_type = models.CharField(max_length=20, choices=WORKSPACE_TYPES, default="individual")  
     work_type = models.CharField(max_length=50, choices=WORK_TYPES, default="software_development")  
     description = models.TextField(blank=True, null=True)  
+
     plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True, blank=True)
-    is_active = models.BooleanField(default=True)  
+    stripe_customer_id = models.CharField(max_length=255, null=True, blank=True)
+    stripe_subscription_id = models.CharField(max_length=255, null=True, blank=True)
+
+    is_active = models.BooleanField(default=False)  
     is_blocked_by_admin = models.BooleanField(default=False)  
     plan_expiry = models.DateTimeField(null=True, blank=True)  
     created_at = models.DateTimeField(auto_now_add=True)

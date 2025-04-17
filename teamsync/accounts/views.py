@@ -1,4 +1,4 @@
-from .serializers import UserRegisterSerializer,LoginSerializer,ResendOTPSerializer,OTPVerificationSerializer,UserSerializer
+from .serializers import UserRegisterSerializer,LoginSerializer,ResendOTPSerializer,OTPVerificationSerializer,UserSerializer, UserDetailUpdateSerializer
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework.permissions import AllowAny,IsAuthenticated
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -7,15 +7,13 @@ from django.contrib.auth import get_user_model
 from rest_framework.response import Response
 from .models import Accounts
 from rest_framework.views import APIView
+from rest_framework import generics
 from django.core.mail import send_mail
 from django.utils.timezone import now
 from rest_framework import status
 from django.conf import settings
 from datetime import timedelta
 import requests
-import hashlib
-import random
-import redis
 from .tasks import send_otp_email  
 
 
@@ -178,6 +176,8 @@ class GoogleLoginView(APIView):
                 "email": user.email,
                 "first_name": user.first_name,
                 "last_name": user.last_name,
+                "phone_number":user.phone_number,
+                "profile_picture":user.profile_picture,
                 "is_superuser": user.is_superuser,
             },
             "access_token": str(access),  
@@ -213,8 +213,62 @@ class LogoutView(APIView):
 
         response = Response({"message": "Logout successful"}, status=status.HTTP_200_OK)
 
-        # Clear access and refresh tokens from cookies
         response.set_cookie("access", "", max_age=0, httponly=True, samesite="None", secure=True)
 
         return response
 
+
+
+class SaveProfileImagesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        image_urls = request.data.get("image_urls", [])
+
+        if not image_urls:
+            return Response({"error": "No image URLs provided"}, status=400)
+
+        try:
+            user.profile_picture = image_urls[0] 
+            user.save()
+            return Response({"message": "Profile picture updated", "image_urls": image_urls})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+        
+
+
+
+class UserDetailUpdateView(generics.UpdateAPIView):
+    serializer_class = UserDetailUpdateSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
+    def patch(self, request, *args, **kwargs):
+        return self.partial_update(request, *args, **kwargs)
+    
+
+
+
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        current_password = request.data.get("currentPassword")
+        new_password = request.data.get("newPassword")
+        confirm_password = request.data.get("confirmPassword")
+
+        if not user.check_password(current_password):
+            return Response({"error": "Current password is incorrect."}, status=status.HTTP_406_NOT_ACCEPTABLE)
+
+        if new_password != confirm_password:
+            return Response({"error": "New passwords do not match."}, status=status.HTTP_406_NOT_ACCEPTABLE)
+
+        user.set_password(new_password)
+        user.save()
+
+        return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)

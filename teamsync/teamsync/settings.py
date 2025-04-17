@@ -10,12 +10,18 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
-from datetime import timedelta
 from decouple import config
+from datetime import timedelta
 from pathlib import Path
 from celery import Celery
 import stripe
-import os
+
+
+STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET")
+STRIPE_SECRET_KEY = config("STRIPE_SECRET_KEY")
+STRIPE_PUBLIC_KEY = config("STRIPE_PUBLIC_KEY")
+
+stripe.api_key = STRIPE_SECRET_KEY
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -99,6 +105,7 @@ INSTALLED_APPS = [
     'adminpanel',
     'accounts',
     'workspace',
+    'project',
  
 ]
 
@@ -148,13 +155,13 @@ DATABASES = {
 
 AUTH_USER_MODEL = "accounts.Accounts" 
 
+
+
 SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = config("SOCIAL_AUTH_GOOGLE_OAUTH2_KEY")
 SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = config("SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET")
 
-STRIPE_SECRET_KEY = config("STRIPE_SECRET_KEY")
-STRIPE_PUBLIC_KEY = config("STRIPE_PUBLIC_KEY")
 
-stripe.api_key = STRIPE_SECRET_KEY
+
 
 CACHES = {
     "default": {

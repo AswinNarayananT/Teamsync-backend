@@ -12,7 +12,6 @@ from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from accounts.models import Accounts
 
-# Redis client
 redis_client = redis.StrictRedis(host="localhost", port=6379, db=0, decode_responses=True)
 
 
@@ -53,23 +52,19 @@ class OTPVerificationSerializer(serializers.Serializer):
         except Accounts.DoesNotExist:
             raise serializers.ValidationError("Invalid email or OTP.")
 
-        # Fetch the OTP hash from Redis
         otp_key = f"otp:{user.id}"
         stored_otp_hash = redis_client.get(otp_key)
 
         if not stored_otp_hash:
             raise serializers.ValidationError("OTP has expired or is invalid.")
 
-        # Verify the OTP hash
         if stored_otp_hash != hashlib.sha256(otp.encode()).hexdigest():
             raise serializers.ValidationError("Invalid OTP.")
 
-        # OTP is correct, activate the user
         user.otp_verified = True
         user.is_active = True  
         user.save()
 
-        # Delete OTP from Redis after successful verification
         redis_client.delete(otp_key)
 
         return {"message": "OTP verified successfully", "user_id": user.id}
@@ -132,6 +127,8 @@ class LoginSerializer(serializers.Serializer):
                 "email": user.email,
                 "first_name": user.first_name,
                 "last_name": user.last_name,
+                "phone_number":user.phone_number,
+                "profile_picture":user.profile_picture,
                 "is_superuser":user.is_superuser
             },
             "access_token": str(access),  
@@ -143,3 +140,9 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = Accounts
         exclude = ["password"]     
+
+
+class UserDetailUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Accounts
+        fields = ['first_name', 'last_name', 'phone_number'] 
