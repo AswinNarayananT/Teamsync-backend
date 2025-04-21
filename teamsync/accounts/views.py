@@ -199,8 +199,6 @@ class GoogleLoginView(APIView):
 
 
 class LogoutView(APIView):
-    permission_classes = [IsAuthenticated]
-
     def post(self, request):
         refresh_token = request.data.get("refresh")
 
