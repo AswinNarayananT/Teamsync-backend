@@ -1,13 +1,14 @@
-from rest_framework.generics import CreateAPIView
+from rest_framework.generics import CreateAPIView,  RetrieveAPIView
 from rest_framework.views import APIView 
 from .models import Project, Issue
-from workspace.models import Workspace
+from workspace.models import Workspace, WorkspaceMember
 from .serializers import ProjectSerializer, IssueSerializer, IssueCreateSerializer
 from .permissions import HasRoleInWorkspace
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status, viewsets
 from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import NotFound
 
 
 
@@ -61,9 +62,18 @@ class CreateIssueView(CreateAPIView):
     serializer_class = IssueCreateSerializer
     permission_classes = [IsAuthenticated]
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            self.perform_create(serializer)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        print("Serializer Errors:", serializer.errors)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
     def perform_create(self, serializer):
         project_id = self.kwargs.get("project_id")
-        serializer.save(project_id=project_id)
+        project = get_object_or_404(Project, id=project_id)
+        serializer.save(project=project)
 
 
 
@@ -99,7 +109,80 @@ class AssignParentEpicView(APIView):
             issue.parent = epic
             issue.save()
 
-            return Response({'message': 'Parent epic assigned successfully'})
+            return Response({
+                'issue_id': issue.id,
+                'epic_id': epic.id,
+            }, status=200)
         
         except Issue.DoesNotExist:
             return Response({'error': 'Issue or Epic not found'}, status=404)
+        
+
+
+
+class AssignAssigneeToIssueView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, issue_id):
+        membership_id = request.data.get("member_id")
+        if not membership_id:
+            return Response({"error": "member_id is required"},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        membership = get_object_or_404(WorkspaceMember, id=membership_id)
+        issue_qs = Issue.objects.filter(id=issue_id)
+        issue = get_object_or_404(issue_qs, id=issue_id)
+
+        # Verify same workspace
+        if membership.workspace_id != issue.project.workspace_id:
+            return Response({"error": "User is not part of the workspace."},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        # Only update assignee_id column
+        updated = issue_qs.update(assignee_id=membership.user_id)
+        if not updated:
+            return Response({"error": "Failed to assign assignee."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(
+            {"id": issue_id, "assignee": membership.user_id},
+            status=status.HTTP_200_OK
+        )
+    
+
+
+class UpdateIssueStatusView(APIView):
+    permission_classes = [IsAuthenticated]  # Make sure the user is authenticated
+
+    def patch(self, request, *args, **kwargs):
+        issue_id = kwargs.get("issue_id")
+        new_status = request.data.get("status")
+
+        if new_status not in ["todo", "in_progress", "review", "done"]:
+            return Response({"error": "Invalid status value."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            issue = Issue.objects.get(id=issue_id)
+        except Issue.DoesNotExist:
+            return Response({"error": "Issue not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Update the status
+        issue.status = new_status
+        issue.save()
+
+        # Return only the issue_id and the updated status
+        return Response({"issue_id": issue.id, "status": issue.status}, status=status.HTTP_200_OK)
+    
+
+
+
+class IssueDetailView(RetrieveAPIView):
+    queryset = Issue.objects.all()
+    serializer_class = IssueSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        try:
+            return Issue.objects.get(pk=self.kwargs["pk"])
+        except Issue.DoesNotExist:
+            raise NotFound("Issue not found")

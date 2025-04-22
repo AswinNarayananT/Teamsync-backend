@@ -68,3 +68,20 @@ class Issue(models.Model):
 
     def __str__(self):
         return f"{self.type.upper()}: {self.title}"
+    
+
+class Attachment(models.Model):
+    ATTACHMENT_TYPES = [
+        ("file", "File"),
+        ("link", "Link"),
+    ]
+
+    issue = models.ForeignKey("Issue", on_delete=models.CASCADE, related_name="attachments")
+    type = models.CharField(max_length=10, choices=ATTACHMENT_TYPES)
+    file = models.FileField(upload_to="attachments/files/", null=True, blank=True)
+    link = models.URLField(null=True, blank=True)
+
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Attachment ({self.type}) for {self.issue}"

@@ -1,5 +1,6 @@
 from .serializers import UserRegisterSerializer,LoginSerializer,ResendOTPSerializer,OTPVerificationSerializer,UserSerializer, UserDetailUpdateSerializer
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.exceptions import TokenError as SimpleJWTTokenError, ExpiredTokenError
 from rest_framework.permissions import AllowAny,IsAuthenticated
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -205,12 +206,15 @@ class LogoutView(APIView):
         if refresh_token:
             try:
                 token = RefreshToken(refresh_token)
-                token.blacklist() 
+                token.blacklist()
+            except ExpiredTokenError:
+                print("Token already expired — skipping blacklist.")
+            except SimpleJWTTokenError as e:
+                print("Other token error:", e)
             except Exception as e:
-                print("Token blacklisting error:", e)
+                print("Unexpected logout error:", e)
 
         response = Response({"message": "Logout successful"}, status=status.HTTP_200_OK)
-
         response.set_cookie("access", "", max_age=0, httponly=True, samesite="None", secure=True)
 
         return response
