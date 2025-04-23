@@ -1,14 +1,14 @@
-from rest_framework.generics import CreateAPIView,  RetrieveAPIView
+from rest_framework.generics import CreateAPIView,  RetrieveAPIView, RetrieveUpdateAPIView
 from rest_framework.views import APIView 
 from .models import Project, Issue
 from workspace.models import Workspace, WorkspaceMember
 from .serializers import ProjectSerializer, IssueSerializer, IssueCreateSerializer
-from .permissions import HasRoleInWorkspace
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status, viewsets
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import NotFound
+from django.core.exceptions import ObjectDoesNotExist
 
 
 
@@ -18,7 +18,7 @@ from rest_framework.exceptions import NotFound
 
 class CreateProjectView(CreateAPIView):
     serializer_class = ProjectSerializer
-    permission_classes = [IsAuthenticated, HasRoleInWorkspace]
+    permission_classes = [IsAuthenticated]
     required_roles = ["owner", "Manager"]  
 
     def initial(self, request, *args, **kwargs):
@@ -75,6 +75,52 @@ class CreateIssueView(CreateAPIView):
         project = get_object_or_404(Project, id=project_id)
         serializer.save(project=project)
 
+
+class IssueDetailView(RetrieveAPIView):
+    queryset = Issue.objects.select_related('project', 'assignee').prefetch_related('attachments')
+    serializer_class = IssueSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'pk'
+
+    def get_object(self):
+        try:
+            return self.get_queryset().get(**{self.lookup_field: self.kwargs[self.lookup_field]})
+        except ObjectDoesNotExist:
+            raise NotFound("Issue not found")
+        
+
+
+class IssueDetailUpdateView(RetrieveUpdateAPIView):
+    queryset = Issue.objects.all()
+    serializer_class = IssueSerializer
+    permission_classes = [IsAuthenticated]  # Only authenticated users can access the details
+    
+    def get(self, request, *args, **kwargs):
+        """
+        Retrieve a single issue and its details.
+        """
+        issue = self.get_object()
+        serializer = self.get_serializer(issue)
+        return Response(serializer.data)
+    
+    def put(self, request, *args, **kwargs):
+        """
+        Update an existing issue.
+        """
+        issue = self.get_object()
+        serializer = self.get_serializer(issue, data=request.data, partial=True)  # Partial updates allowed
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, *args, **kwargs):
+        """
+        Partially update an existing issue.
+        """
+        return self.put(request, *args, **kwargs)
 
 
 
@@ -176,13 +222,3 @@ class UpdateIssueStatusView(APIView):
 
 
 
-class IssueDetailView(RetrieveAPIView):
-    queryset = Issue.objects.all()
-    serializer_class = IssueSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self):
-        try:
-            return Issue.objects.get(pk=self.kwargs["pk"])
-        except Issue.DoesNotExist:
-            raise NotFound("Issue not found")

@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions,status
-from .models import Workspace, WorkspaceMember,WorkspaceInvitation
+from .models import Workspace, WorkspaceMember,WorkspaceInvitation, CustomRole
 from rest_framework.response import Response
-from .serializers import WorkspaceSerializer, WorkspaceMemberSerializer
+from .serializers import WorkspaceSerializer, WorkspaceMemberSerializer, CustomRoleSerializer
 from adminpanel.models import Plan
 from rest_framework import status
 from django.conf import settings
@@ -12,7 +12,7 @@ from django.utils.html import format_html
 from django.shortcuts import get_object_or_404
 import stripe
 import uuid
-
+from project.permissions import HasWorkspacePermission
 
 # Create your views here.
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -381,3 +381,64 @@ class CancelSubscriptionView(APIView):
         except Exception as e:
             print(f"Stripe error: {e}")
             return Response({"error": "Failed to cancel subscription."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class CreateCustomRoleView(APIView):
+    permission_classes = [IsAuthenticated, HasWorkspacePermission]
+    required_permissions = ["create_custom_role"]
+
+    def post(self, request, workspace_id):
+        role_name = request.data.get("name")
+        permissions = request.data.get("permissions", [])
+
+        if not role_name or not isinstance(permissions, list):
+            return Response({"error": "Invalid input"}, status=400)
+
+        role = CustomRole.objects.create(
+            workspace=request.current_workspace,
+            name=role_name,
+            permissions=permissions
+        )
+
+        serialized = CustomRoleSerializer(role)
+        return Response(serialized.data, status=201)
+    
+
+
+class CustomRoleListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, workspace_id):
+        workspace = get_object_or_404(Workspace, id=workspace_id)
+        # You can add check for workspace.owner == request.user if needed
+        roles = CustomRole.objects.filter(workspace=workspace)
+        serializer = CustomRoleSerializer(roles, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, workspace_id):
+        workspace = get_object_or_404(Workspace, id=workspace_id)
+        serializer = CustomRoleSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(workspace=workspace)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CustomRoleUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, workspace_id, role_id):
+        workspace = get_object_or_404(Workspace, id=workspace_id)
+        role = get_object_or_404(CustomRole, id=role_id, workspace=workspace)
+        serializer = CustomRoleSerializer(role, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request, workspace_id, role_id):
+        workspace = get_object_or_404(Workspace, id=workspace_id)
+        role = get_object_or_404(CustomRole, id=role_id, workspace=workspace)
+        role.delete()
+        return Response({"detail": "Role deleted successfully."}, status=status.HTTP_204_NO_CONTENT)

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Workspace, WorkspaceMember
+from .models import Workspace, WorkspaceMember, CustomRole
 
 class WorkspaceSerializer(serializers.ModelSerializer):
     class Meta:
@@ -19,3 +19,10 @@ class WorkspaceMemberSerializer(serializers.ModelSerializer):
         model = WorkspaceMember
         fields = ["id", "user_email","user_id", "user_name", "role", "joined_at", "workspace"]
     
+
+
+class CustomRoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomRole
+        fields = ['id', 'workspace', 'name', 'permissions']
+        read_only_fields = ['id', 'workspace']

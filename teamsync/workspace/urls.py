@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import UserWorkspacesView, WorkspaceCreateView, SendInvitesView, AcceptInviteView, WorkspaceMembersListView, StripeSubscriptionDetailView, CancelSubscriptionView,  WorkspaceStatusView
+from .views import UserWorkspacesView, WorkspaceCreateView, SendInvitesView, AcceptInviteView, WorkspaceMembersListView, StripeSubscriptionDetailView, CancelSubscriptionView,  WorkspaceStatusView, CreateCustomRoleView, CustomRoleListCreateView, CustomRoleUpdateView
 from .stripe_webhook import StripeWebhookView
 
 urlpatterns = [
@@ -12,4 +12,7 @@ urlpatterns = [
     path("subscription/<str:subscription_id>/", StripeSubscriptionDetailView.as_view(), name="stripe-subscription-detail"),
     path("<int:workspace_id>/status/", WorkspaceStatusView.as_view(), name="workspace-status"),
     path("cancel-subscription/", CancelSubscriptionView.as_view(), name="cancel-subscription"),
+    path("<int:workspace_id>/create-role/", CreateCustomRoleView.as_view(), name="create-role"),
+    path('<int:workspace_id>/custom-roles/', CustomRoleListCreateView.as_view(), name="custom-role"),
+    path('<int:workspace_id>/roles/<int:role_id>/', CustomRoleUpdateView.as_view(), name="update-role"), 
 ]

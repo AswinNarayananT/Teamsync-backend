@@ -107,3 +107,16 @@ class WorkspaceInvitation(models.Model):
 
     def __str__(self):
         return f"Invite: {self.email} to {self.workspace.name} as {self.role}"
+    
+
+
+class CustomRole(models.Model):
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="custom_roles")
+    name = models.CharField(max_length=50) 
+    permissions = models.JSONField(default=list) 
+
+    class Meta:
+        unique_together = ["workspace", "name"]
+
+    def __str__(self):
+        return f"{self.name} - {self.workspace.name}"
