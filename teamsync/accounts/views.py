@@ -1,21 +1,26 @@
-from .serializers import UserRegisterSerializer,LoginSerializer,ResendOTPSerializer,OTPVerificationSerializer,UserSerializer, UserDetailUpdateSerializer
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from .serializers import UserRegisterSerializer,LoginSerializer,ResendOTPSerializer,OTPVerificationSerializer,UserSerializer, UserDetailUpdateSerializer, ForgotPasswordSerializer, ResetPasswordSerializer
 from rest_framework_simplejwt.exceptions import TokenError as SimpleJWTTokenError, ExpiredTokenError
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework.permissions import AllowAny,IsAuthenticated
+from django.contrib.auth.tokens import default_token_generator
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.utils.http import urlsafe_base64_encode
+from django.utils.http import urlsafe_base64_decode
 from django.contrib.auth import get_user_model
+from django.utils.encoding import force_bytes
 from rest_framework.response import Response
-from .models import Accounts
 from rest_framework.views import APIView
-from rest_framework import generics
 from django.core.mail import send_mail
 from django.utils.timezone import now
+from rest_framework import generics
+from .tasks import send_otp_email  
 from rest_framework import status
 from django.conf import settings
 from datetime import timedelta
+from .models import Accounts
 import requests
-from .tasks import send_otp_email  
+
 
 
 
@@ -274,3 +279,54 @@ class ChangePasswordView(APIView):
         user.save()
 
         return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)
+    
+
+
+
+class ForgotPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ForgotPasswordSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        email = serializer.validated_data['email']
+        user = Accounts.objects.get(email=email)
+
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        reset_link = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}"
+
+        send_mail(
+            subject="Password Reset",
+            message=f"Reset your password using this link: {reset_link}",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+        )
+
+        return Response({"message": "Password reset link sent."}, status=status.HTTP_200_OK)
+    
+
+class ResetPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, uidb64, token):
+        try:
+            uid = urlsafe_base64_decode(uidb64).decode()
+            user = Accounts.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return Response({"error": "Invalid token or user"}, status=400)
+
+        if not default_token_generator.check_token(user, token):
+            return Response({"error": "Token is invalid or expired"}, status=400)
+
+        serializer = ResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user.set_password(serializer.validated_data['password'])
+        user.save()
+
+        return Response({"message": "Password has been reset successfully."}, status=200)    
