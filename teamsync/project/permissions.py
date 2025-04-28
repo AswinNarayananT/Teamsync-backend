@@ -1,5 +1,3 @@
-# teamsync/project/permissions.py
-
 from rest_framework.permissions import BasePermission
 from workspace.models import WorkspaceMember, CustomRole
 
@@ -26,19 +24,26 @@ class HasWorkspacePermission(BasePermission):
 
         default_role_permissions = {
             "owner": ["*"],
-            "manager": ["create_epic", "start_sprint", "invite_members"],
+            "manager": ["create_project","create_epic", "start_sprint", "invite_members"],
             "developer": ["update_status", "view_board"],
-            "designer": ["update_design_doc"],
+            "designer": ["update_status"],
         }
 
         if role in default_role_permissions:
             role_perms = default_role_permissions[role]
-            return "*" in role_perms or all(p in role_perms for p in required_permissions)
+            if "*" in role_perms or all(p in role_perms for p in required_permissions):
+                return True
+            self.message = "You do not have the required permissions."
+            return False
 
         try:
             custom_role = CustomRole.objects.get(workspace=current_workspace, name=role)
-            return all(p in custom_role.permissions for p in required_permissions)
+            if all(p in custom_role.permissions for p in required_permissions):
+                return True
+            self.message = "You do not have the required permissions."
+            return False
         except CustomRole.DoesNotExist:
+            self.message = "Your role does not exist."
             return False
 
 

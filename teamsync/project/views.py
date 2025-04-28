@@ -1,16 +1,15 @@
-from rest_framework.generics import CreateAPIView,  RetrieveAPIView, RetrieveUpdateAPIView
+from rest_framework.generics import CreateAPIView,  RetrieveAPIView, RetrieveUpdateAPIView,RetrieveUpdateDestroyAPIView, ListCreateAPIView
 from rest_framework.views import APIView 
-from .models import Project, Issue
+from .models import Project, Issue, Sprint
 from workspace.models import Workspace, WorkspaceMember
-from .serializers import ProjectSerializer, IssueSerializer, IssueCreateSerializer
+from .serializers import ProjectSerializer, IssueSerializer, IssueCreateSerializer, SprintSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status, viewsets
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import NotFound
 from django.core.exceptions import ObjectDoesNotExist
-
-
+from .permissions import HasWorkspacePermission
 
 
 # Create your views here.
@@ -18,8 +17,8 @@ from django.core.exceptions import ObjectDoesNotExist
 
 class CreateProjectView(CreateAPIView):
     serializer_class = ProjectSerializer
-    permission_classes = [IsAuthenticated]
-    required_roles = ["owner", "Manager"]  
+    permission_classes = [IsAuthenticated,HasWorkspacePermission]
+    required_permissions = ["create_project"] 
 
     def initial(self, request, *args, **kwargs):
 
@@ -93,22 +92,16 @@ class IssueDetailView(RetrieveAPIView):
 class IssueDetailUpdateView(RetrieveUpdateAPIView):
     queryset = Issue.objects.all()
     serializer_class = IssueSerializer
-    permission_classes = [IsAuthenticated]  # Only authenticated users can access the details
+    permission_classes = [IsAuthenticated]  
     
     def get(self, request, *args, **kwargs):
-        """
-        Retrieve a single issue and its details.
-        """
         issue = self.get_object()
         serializer = self.get_serializer(issue)
         return Response(serializer.data)
     
     def put(self, request, *args, **kwargs):
-        """
-        Update an existing issue.
-        """
         issue = self.get_object()
-        serializer = self.get_serializer(issue, data=request.data, partial=True)  # Partial updates allowed
+        serializer = self.get_serializer(issue, data=request.data, partial=True)  
 
         if serializer.is_valid():
             serializer.save()
@@ -117,9 +110,6 @@ class IssueDetailUpdateView(RetrieveUpdateAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, *args, **kwargs):
-        """
-        Partially update an existing issue.
-        """
         return self.put(request, *args, **kwargs)
 
 
@@ -165,7 +155,6 @@ class AssignParentEpicView(APIView):
         
 
 
-
 class AssignAssigneeToIssueView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -179,12 +168,10 @@ class AssignAssigneeToIssueView(APIView):
         issue_qs = Issue.objects.filter(id=issue_id)
         issue = get_object_or_404(issue_qs, id=issue_id)
 
-        # Verify same workspace
         if membership.workspace_id != issue.project.workspace_id:
             return Response({"error": "User is not part of the workspace."},
                             status=status.HTTP_403_FORBIDDEN)
 
-        # Only update assignee_id column
         updated = issue_qs.update(assignee_id=membership.user_id)
         if not updated:
             return Response({"error": "Failed to assign assignee."},
@@ -198,7 +185,7 @@ class AssignAssigneeToIssueView(APIView):
 
 
 class UpdateIssueStatusView(APIView):
-    permission_classes = [IsAuthenticated]  # Make sure the user is authenticated
+    permission_classes = [IsAuthenticated]  
 
     def patch(self, request, *args, **kwargs):
         issue_id = kwargs.get("issue_id")
@@ -212,13 +199,34 @@ class UpdateIssueStatusView(APIView):
         except Issue.DoesNotExist:
             return Response({"error": "Issue not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Update the status
         issue.status = new_status
         issue.save()
 
-        # Return only the issue_id and the updated status
         return Response({"issue_id": issue.id, "status": issue.status}, status=status.HTTP_200_OK)
-    
+
+
+
+
+class ProjectSprintListCreateView(ListCreateAPIView):
+    serializer_class = SprintSerializer
+
+    def get_queryset(self):
+        project_id = self.kwargs['project_id']
+        return Sprint.objects.filter(project_id=project_id).order_by('number')
+
+    def perform_create(self, serializer):
+        project_id = self.kwargs['project_id']
+        project = get_object_or_404(Project, id=project_id)
+
+        latest_sprint = Sprint.objects.filter(project=project).order_by('-number').first()
+        next_number = (latest_sprint.number + 1) if latest_sprint else 1
+
+        serializer.save(project=project, number=next_number)
+
+class SprintDetailView(RetrieveUpdateDestroyAPIView):
+    queryset = Sprint.objects.all()
+    serializer_class = SprintSerializer
+
 
 
 

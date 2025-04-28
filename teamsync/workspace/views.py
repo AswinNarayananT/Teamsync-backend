@@ -19,11 +19,6 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 
-
-
-
-
-
 class UserWorkspacesView(generics.ListAPIView):
     serializer_class = WorkspaceSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -129,14 +124,15 @@ class SendInvitesView(APIView):
     def post(self, request):
         user = request.user
         workspace_id = request.data.get("workspace_id")
-        print(workspace_id)
         invites = request.data.get("invites", [])
         
         try:
-            workspace = Workspace.objects.get(id=workspace_id, owner=user)
-            print(workspace)
+            workspace = Workspace.objects.get(id=workspace_id)
         except Workspace.DoesNotExist:
-            return Response({"error": "Workspace not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Workspace not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if workspace.owner != user:
+            return Response({"error": "You are not authorized to invite members to this workspace"}, status=status.HTTP_403_FORBIDDEN)
         
         for invite in invites:
             email = invite.get("email")
@@ -158,6 +154,8 @@ class SendInvitesView(APIView):
             )
             
             invite_link = f"{settings.FRONTEND_URL}/join-workspace/{token}"
+            
+            print(invite_link)
 
             html_content = format_html(
                 """
@@ -212,7 +210,7 @@ class AcceptInviteView(APIView):
             WorkspaceMember.objects.create(
                 workspace=invitation.workspace,
                 user=user,
-                role=invitation.role  
+                role=invitation.role.lower()  
             )
 
             invitation.accepted = True
@@ -442,3 +440,29 @@ class CustomRoleUpdateView(APIView):
         role = get_object_or_404(CustomRole, id=role_id, workspace=workspace)
         role.delete()
         return Response({"detail": "Role deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+    
+
+class RemoveUserFromWorkspaceView(APIView):
+    permission_classes = [permissions.IsAuthenticated, HasWorkspacePermission]
+    required_permissions = ["team_management"] 
+
+    def delete(self, request, workspace_id, user_id):
+        user = request.user
+
+        try:
+            workspace = Workspace.objects.get(id=workspace_id)
+        except Workspace.DoesNotExist:
+            return Response({"error": "Workspace not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if user.id == int(user_id):
+            return Response({"error": "You cannot remove yourself."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            member = WorkspaceMember.objects.get(workspace=workspace, id=user_id)
+            member.delete()
+            return Response(
+                {"message": "User removed from workspace.", "id": user_id},
+                status=status.HTTP_200_OK
+            )
+        except WorkspaceMember.DoesNotExist:
+            return Response({"error": "User is not a member of this workspace."}, status=status.HTTP_404_NOT_FOUND)

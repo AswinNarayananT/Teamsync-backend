@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import CreateProjectView, WorkspaceProjectsAPIView, CreateIssueView, ProjectEpicsView ,ProjectIssuesView, AssignParentEpicView, AssignAssigneeToIssueView, UpdateIssueStatusView,IssueDetailView, IssueDetailUpdateView
+from .views import CreateProjectView, WorkspaceProjectsAPIView, CreateIssueView, ProjectEpicsView ,ProjectIssuesView, AssignParentEpicView, AssignAssigneeToIssueView, UpdateIssueStatusView, IssueDetailUpdateView,ProjectSprintListCreateView,SprintDetailView
 
 
 urlpatterns = [
@@ -12,4 +12,6 @@ urlpatterns = [
      path('issue/<int:issue_id>/assign-assignee/', AssignAssigneeToIssueView.as_view(), name='assign-assignee'),
      path('issue/<int:issue_id>/status/', UpdateIssueStatusView.as_view(), name='update-issue-status'),
      path("issue/<int:pk>/", IssueDetailUpdateView.as_view(), name="issue-detail"),
+     path('<int:project_id>/sprints/', ProjectSprintListCreateView.as_view(), name='project-sprint-list-create'),
+     path('sprints/<int:pk>/', SprintDetailView.as_view(), name='sprint-detail'),
 ]

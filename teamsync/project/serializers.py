@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Project, Issue ,Attachment
+from .models import Project, Issue ,Attachment, Sprint
 
 class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
@@ -11,11 +11,19 @@ class ProjectSerializer(serializers.ModelSerializer):
         user = self.context["request"].user
         workspace = self.context["request"].current_workspace 
 
-        return Project.objects.create(
+        project = Project.objects.create(
             owner=user,
             workspace=workspace,
             **validated_data
         )
+
+        Sprint.objects.create(
+            project=project,
+            name=f"{project.name}-Sprint-1",
+            number=1
+        )
+
+        return project
 
 class AttachmentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -28,7 +36,7 @@ class IssueCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Issue
-        fields = ['id', 'title', 'description', 'type', 'parent', 'status', 'project', 'assignee', 'start_date', 'end_date', 'attachments']
+        fields = ['id', 'title', 'description', 'type', 'parent', 'status', 'project','sprint', 'assignee', 'start_date', 'end_date', 'attachments']
         read_only_fields = ['project'] 
         extra_kwargs = {
             'description': {'required': False, 'allow_blank': True},
@@ -84,3 +92,9 @@ class IssueSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Parent must be an epic.")
 
         return data
+
+
+class SprintSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Sprint
+        fields = '__all__'
