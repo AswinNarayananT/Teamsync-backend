@@ -98,3 +98,4 @@ class SprintSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sprint
         fields = '__all__'
+        read_only_fields = ('project', 'number', 'name')

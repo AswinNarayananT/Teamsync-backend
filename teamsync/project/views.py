@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from .models import Project, Issue, Sprint
 from workspace.models import Workspace, WorkspaceMember
 from .serializers import ProjectSerializer, IssueSerializer, IssueCreateSerializer, SprintSerializer
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status, viewsets
 from django.shortcuts import get_object_or_404
@@ -215,6 +215,7 @@ class ProjectSprintListCreateView(ListCreateAPIView):
         return Sprint.objects.filter(project_id=project_id).order_by('number')
 
     def perform_create(self, serializer):
+        print("data:L",self.request.data) 
         project_id = self.kwargs['project_id']
         project = get_object_or_404(Project, id=project_id)
 
