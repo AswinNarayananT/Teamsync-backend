@@ -1,4 +1,4 @@
-from rest_framework.generics import CreateAPIView,  RetrieveAPIView, RetrieveUpdateAPIView,RetrieveUpdateDestroyAPIView, ListCreateAPIView
+from rest_framework.generics import CreateAPIView,  RetrieveAPIView, RetrieveUpdateAPIView,RetrieveUpdateDestroyAPIView, ListCreateAPIView, ListAPIView
 from rest_framework.views import APIView 
 from .models import Project, Issue, Sprint
 from workspace.models import Workspace, WorkspaceMember
@@ -66,7 +66,6 @@ class CreateIssueView(CreateAPIView):
         if serializer.is_valid():
             self.perform_create(serializer)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        print("Serializer Errors:", serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def perform_create(self, serializer):
@@ -212,10 +211,9 @@ class ProjectSprintListCreateView(ListCreateAPIView):
 
     def get_queryset(self):
         project_id = self.kwargs['project_id']
-        return Sprint.objects.filter(project_id=project_id).order_by('number')
+        return Sprint.objects.filter(project_id=project_id, is_completed=False).order_by('number')
 
     def perform_create(self, serializer):
-        print("data:L",self.request.data) 
         project_id = self.kwargs['project_id']
         project = get_object_or_404(Project, id=project_id)
 
@@ -228,6 +226,20 @@ class SprintDetailView(RetrieveUpdateDestroyAPIView):
     queryset = Sprint.objects.all()
     serializer_class = SprintSerializer
 
+
+class ActiveSprintIssueListView(ListAPIView):
+    serializer_class = IssueSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        project_id = self.kwargs.get('project_id')
+
+        try:
+            sprint = Sprint.objects.get(project_id=project_id, is_active=True)
+        except Sprint.DoesNotExist:
+            raise NotFound("No active sprint found for this project.")
+
+        return Issue.objects.filter(sprint=sprint)
 
 
 
