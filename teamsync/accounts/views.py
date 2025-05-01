@@ -3,6 +3,7 @@ from rest_framework_simplejwt.exceptions import TokenError as SimpleJWTTokenErro
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework.permissions import AllowAny,IsAuthenticated
 from django.contrib.auth.tokens import default_token_generator
+from .tasks import send_otp_email, send_password_reset_email
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils.http import urlsafe_base64_encode
@@ -11,10 +12,8 @@ from django.contrib.auth import get_user_model
 from django.utils.encoding import force_bytes
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.core.mail import send_mail
 from django.utils.timezone import now
 from rest_framework import generics
-from .tasks import send_otp_email  
 from rest_framework import status
 from django.conf import settings
 from datetime import timedelta
@@ -295,18 +294,17 @@ class ForgotPasswordView(APIView):
             )
 
         email = serializer.validated_data['email']
-        user = Accounts.objects.get(email=email)
+        
+        try:
+            user = Accounts.objects.get(email=email)
+        except Accounts.DoesNotExist:
+            return Response({"message": "Password reset link sent."}, status=status.HTTP_200_OK)
 
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
         reset_link = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}"
 
-        send_mail(
-            subject="Password Reset",
-            message=f"Reset your password using this link: {reset_link}",
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-        )
+        send_password_reset_email.delay(email, reset_link)
 
         return Response({"message": "Password reset link sent."}, status=status.HTTP_200_OK)
     

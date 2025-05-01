@@ -7,8 +7,7 @@ from rest_framework import status
 from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from django.core.mail import EmailMultiAlternatives
-from django.utils.html import format_html
+from accounts.tasks import send_invitation_email
 from django.shortcuts import get_object_or_404
 import stripe
 import uuid
@@ -145,52 +144,16 @@ class SendInvitesView(APIView):
             existing_member = WorkspaceMember.objects.filter(user__email=email, workspace=workspace).exists()
             if existing_member:
                 continue
-            
-            token = uuid.uuid4()
-            invitation, created = WorkspaceInvitation.objects.update_or_create(
+
+            token = str(uuid.uuid4())
+            WorkspaceInvitation.objects.update_or_create(
                 email=email,
                 workspace=workspace,
-                defaults={"role": role, "token": token,"invited_by":user}
-            )
-            
-            invite_link = f"{settings.FRONTEND_URL}/join-workspace/{token}"
-            
-            print(invite_link)
-
-            html_content = format_html(
-                """
-                <div style="text-align: center; font-family: Arial, sans-serif;">
-                    <h2>Hello {},</h2>
-                    <p>You have been invited to join <strong>{}</strong> as a <strong>{}</strong>.</p>
-                    <p>Click the button below to accept the invitation:</p>
-                    <a href="{}" style="
-                        display: inline-block;
-                        padding: 12px 20px;
-                        font-size: 16px;
-                        color: white;
-                        background-color: #007bff;
-                        text-decoration: none;
-                        border-radius: 5px;
-                    ">Accept Invitation</a>
-                </div>
-                """, 
-                
-                full_name,
-                workspace.name,
-                role,
-                invite_link
+                defaults={"role": role, "token": token, "invited_by": user}
             )
 
-            email = EmailMultiAlternatives(
-                subject="Workspace Invitation",
-                body=f"Hello {full_name},\n\nYou have been invited to join '{workspace.name}' as a {role}.\nClick the link to accept: {invite_link}",
-                from_email="no-reply@yourapp.com",
-                to=[email],
-            )
-            email.attach_alternative(html_content, "text/html")  
-            email.send()
+            send_invitation_email.delay(email, full_name, role, workspace.name, token)
 
-        
         return Response({"message": "Invitations sent successfully!"}, status=status.HTTP_201_CREATED)
 
 
