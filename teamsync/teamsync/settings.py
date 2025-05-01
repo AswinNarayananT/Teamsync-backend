@@ -106,7 +106,8 @@ INSTALLED_APPS = [
     'accounts',
     'workspace',
     'project',
- 
+    'realtime',
+    'channels', 
 ]
 
 MIDDLEWARE = [
@@ -158,11 +159,22 @@ DATABASES = {
 AUTH_USER_MODEL = "accounts.Accounts" 
 
 
+ASGI_APPLICATION = "teamsync.asgi.application"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": ["redis://127.0.0.1:6379/2"],  
+        },
+    },
+}
+
+
+
 
 SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = config("SOCIAL_AUTH_GOOGLE_OAUTH2_KEY")
 SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = config("SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET")
-
-
 
 
 CACHES = {

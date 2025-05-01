@@ -10,6 +10,9 @@ from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import NotFound
 from django.core.exceptions import ObjectDoesNotExist
 from .permissions import HasWorkspacePermission
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from realtime.models import Notification
 
 
 # Create your views here.
@@ -154,6 +157,10 @@ class AssignParentEpicView(APIView):
         
 
 
+
+
+
+
 class AssignAssigneeToIssueView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -175,6 +182,25 @@ class AssignAssigneeToIssueView(APIView):
         if not updated:
             return Response({"error": "Failed to assign assignee."},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        workspace = issue.project.workspace
+        message = f"You've been assigned to issue: {issue.title}"
+        notification = Notification.objects.create(
+            recipient=membership.user,
+            workspace=workspace,
+            message=message
+        )
+
+        # 2) Broadcast via Channel Layer
+        channel_layer = get_channel_layer()
+        group_name = f"workspace_{workspace.id}_user_{membership.user.id}"
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                "type": "send_notification",    # maps to NotificationConsumer.send_notification
+                "content": {"message": notification.message},
+            }
+        )
 
         return Response(
             {"id": issue_id, "assignee": membership.user_id},
