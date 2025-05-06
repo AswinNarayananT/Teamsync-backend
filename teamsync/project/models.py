@@ -73,15 +73,14 @@ class Issue(models.Model):
 
 class Attachment(models.Model):
     ATTACHMENT_TYPES = [
-        ("file", "File"),
-        ("link", "Link"),
+        ("file", "File"),     
+        ("link", "Link"),     
+        ("image", "Image"),  
     ]
 
     issue = models.ForeignKey("Issue", on_delete=models.CASCADE, related_name="attachments")
     type = models.CharField(max_length=10, choices=ATTACHMENT_TYPES)
-    file = models.FileField(upload_to="attachments/files/", null=True, blank=True)
-    link = models.URLField(null=True, blank=True)
-
+    url = models.URLField() 
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

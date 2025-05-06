@@ -1,4 +1,3 @@
-# realtime/consumers.py
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
@@ -11,30 +10,24 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         self.user = self.scope.get('user', AnonymousUser())
 
         if not self.user.is_authenticated:
-            # Reject unauthenticated users
             return await self.close()
 
-        # Build the exact group name that the view will broadcast to
         self.group_name = f"workspace_{self.workspace_id}_user_{self.user.id}"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
-
-        # Accept the WebSocket handshake
         await self.accept()
 
-        # Fetch and send any existing notifications
-        notifications = await self.fetch_notifications(self.user.id, self.workspace_id)
+        data = await self.fetch_notifications(self.user.id, self.workspace_id)
         await self.send(json.dumps({
             'type': 'init',
-            'notifications': notifications,
+            'notifications': data['notifications'],
+            'unread_count': data['unread_count'],
         }))
 
     async def disconnect(self, close_code):
-        # Clean up group membership
         if hasattr(self, 'group_name'):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     async def send_notification(self, event):
-        # Called by the group_send in your view
         await self.send(json.dumps({
             'type': 'new',
             'message': event['content']['message'],
@@ -46,11 +39,27 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             recipient_id=user_id,
             workspace_id=workspace_id
         ).order_by('-created_at')
-        return [
-            {
-                'message': n.message,
-                'created_at': n.created_at.isoformat(),
-                'is_read': n.is_read,
-            }
-            for n in qs
-        ]
+        unread_count = qs.filter(is_read=False).count()
+        return {
+            'notifications': [
+                {
+                    'message': n.message,
+                    'created_at': n.created_at.isoformat(),
+                    'is_read': n.is_read,
+                } for n in qs
+            ],
+            'unread_count': unread_count,
+        }
+    
+    async def receive(self, text_data):
+        data = json.loads(text_data)
+        if data.get('type') == 'mark_read':
+            await self.mark_all_as_read(self.user.id, self.workspace_id)
+
+    @database_sync_to_async
+    def mark_all_as_read(self, user_id, workspace_id):
+        Notification.objects.filter(
+            recipient_id=user_id,
+            workspace_id=workspace_id,
+            is_read=False
+        ).update(is_read=True)

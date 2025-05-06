@@ -15,6 +15,11 @@ from datetime import timedelta
 from pathlib import Path
 from celery import Celery
 import stripe
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+
+
 
 
 STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET")
@@ -74,7 +79,7 @@ REST_FRAMEWORK = {
 
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": True,
@@ -251,6 +256,13 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
+
+cloudinary.config( 
+  cloud_name = config('CLOUDINARY_CLOUD_NAME'), 
+  api_key = config('CLOUDINARY_API_KEY'), 
+  api_secret = config('CLOUDINARY_API_SECRET'),
+  secure=True
+)
 
 STATIC_URL = 'static/'
 

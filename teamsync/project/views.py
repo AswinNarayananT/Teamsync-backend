@@ -1,11 +1,11 @@
 from rest_framework.generics import CreateAPIView,  RetrieveAPIView, RetrieveUpdateAPIView,RetrieveUpdateDestroyAPIView, ListCreateAPIView, ListAPIView
 from rest_framework.views import APIView 
-from .models import Project, Issue, Sprint
+from .models import Project, Issue, Sprint, Attachment
 from workspace.models import Workspace, WorkspaceMember
-from .serializers import ProjectSerializer, IssueSerializer, IssueCreateSerializer, SprintSerializer
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from .serializers import ProjectSerializer, IssueSerializer, IssueCreateSerializer, SprintSerializer, AttachmentSerializer
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status, viewsets
+from rest_framework import status
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import NotFound
 from django.core.exceptions import ObjectDoesNotExist
@@ -13,6 +13,11 @@ from .permissions import HasWorkspacePermission
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from realtime.models import Notification
+from rest_framework.parsers import MultiPartParser, FormParser
+import cloudinary.uploader
+
+
+
 
 
 # Create your views here.
@@ -157,10 +162,6 @@ class AssignParentEpicView(APIView):
         
 
 
-
-
-
-
 class AssignAssigneeToIssueView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -191,15 +192,14 @@ class AssignAssigneeToIssueView(APIView):
             message=message
         )
 
-        # 2) Broadcast via Channel Layer
         channel_layer = get_channel_layer()
         group_name = f"workspace_{workspace.id}_user_{membership.user.id}"
         async_to_sync(channel_layer.group_send)(
             group_name,
             {
-                "type": "send_notification",    # maps to NotificationConsumer.send_notification
+                "type": "send_notification",    
                 "content": {"message": notification.message},
-            }
+            }   
         )
 
         return Response(
@@ -233,6 +233,7 @@ class UpdateIssueStatusView(APIView):
 
 
 class ProjectSprintListCreateView(ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
     serializer_class = SprintSerializer
 
     def get_queryset(self):
@@ -249,23 +250,106 @@ class ProjectSprintListCreateView(ListCreateAPIView):
         serializer.save(project=project, number=next_number)
 
 class SprintDetailView(RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
     queryset = Sprint.objects.all()
     serializer_class = SprintSerializer
 
 
-class ActiveSprintIssueListView(ListAPIView):
-    serializer_class = IssueSerializer
+class ActiveSprintIssueListView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def get(self, request, project_id):
+        
+        sprint = Sprint.objects.filter(project_id=project_id, is_active=True).first()
+        
+        if not sprint:
+            return Response({
+                "sprint": None,
+                "issues": []
+            })
+
+        issues = Issue.objects.filter(sprint=sprint)
+        print(issues)
+        issue_serializer = IssueSerializer(issues, many=True)
+        sprint_serializer = SprintSerializer(sprint)
+
+        return Response({
+            "sprint": sprint_serializer.data,
+            "issues": issue_serializer.data
+        })
+
+
+from rest_framework.generics import ListCreateAPIView
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+import cloudinary.uploader
+
+class AttachmentListCreateView(ListCreateAPIView):
+    serializer_class = AttachmentSerializer
+    parser_classes = [MultiPartParser, FormParser]
+
     def get_queryset(self):
-        project_id = self.kwargs.get('project_id')
+        issue_id = self.kwargs['issue_id']
+        return Attachment.objects.filter(issue_id=issue_id).order_by('-uploaded_at')
 
-        try:
-            sprint = Sprint.objects.get(project_id=project_id, is_active=True)
-        except Sprint.DoesNotExist:
-            raise NotFound("No active sprint found for this project.")
+    def list(self, request, *args, **kwargs):
+        serializer = self.get_serializer(self.get_queryset(), many=True)
+        return Response(serializer.data)
 
-        return Issue.objects.filter(sprint=sprint)
+    def create(self, request, *args, **kwargs):
+        issue = get_object_or_404(Issue, id=self.kwargs['issue_id'])
+        attachment_type = request.data.get('type')
 
+        # Base data for serializer
+        data = {
+            'issue': issue.id,
+            'type': attachment_type,
+        }
 
+        # Link attachments
+        if attachment_type == 'link':
+            url = request.data.get('url')
+            if not url:
+                return Response({'error': 'URL is required for link attachment.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            data['url'] = url
+
+        # File or Image attachments
+        elif attachment_type in ('file', 'image'):
+            upload_file = request.FILES.get('file')
+            if not upload_file:
+                return Response({'error': 'File is required for file/image attachment.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            # only allow images or pdf
+            allowed = ['image/jpeg', 'image/png', 'application/pdf', 'image/webp']
+            if upload_file.content_type not in allowed:
+                return Response({
+                    'error': f'Allowed types: {", ".join(allowed)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                result = cloudinary.uploader.upload(
+                    upload_file,
+                    folder="TeamSync",
+                    resource_type="auto"
+                )
+                data['url'] = result.get('secure_url')
+            except Exception as e:
+                return Response({'error': f'Upload failed: {str(e)}'},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        else:
+            return Response({'error': 'Invalid attachment type.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # now serialize & save
+        serializer = self.get_serializer(data=data)
+        if serializer.is_valid():
+            attachment = serializer.save()
+            return Response(self.get_serializer(attachment).data,
+                            status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

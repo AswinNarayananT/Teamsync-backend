@@ -28,15 +28,15 @@ class ProjectSerializer(serializers.ModelSerializer):
 class AttachmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Attachment
-        fields = ['id', 'type', 'file', 'link', 'uploaded_at']
+        fields = ['id', 'issue', 'type', 'url', 'uploaded_at']
+        read_only_fields = ['id', 'uploaded_at']
 
 
 class IssueCreateSerializer(serializers.ModelSerializer):
-    attachments = AttachmentSerializer(many=True, required=False)
 
     class Meta:
         model = Issue
-        fields = ['id', 'title', 'description', 'type', 'parent', 'status', 'project','sprint', 'assignee', 'start_date', 'end_date', 'attachments']
+        fields = ['id', 'title', 'description', 'type', 'parent', 'status', 'project','sprint', 'assignee', 'start_date', 'end_date']
         read_only_fields = ['project'] 
         extra_kwargs = {
             'description': {'required': False, 'allow_blank': True},
