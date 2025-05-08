@@ -1,4 +1,4 @@
-from rest_framework.generics import CreateAPIView,  RetrieveAPIView, RetrieveUpdateAPIView,RetrieveUpdateDestroyAPIView, ListCreateAPIView, ListAPIView
+from rest_framework.generics import CreateAPIView,  RetrieveAPIView, RetrieveUpdateAPIView,RetrieveUpdateDestroyAPIView, ListCreateAPIView, DestroyAPIView, UpdateAPIView
 from rest_framework.views import APIView 
 from .models import Project, Issue, Sprint, Attachment
 from workspace.models import Workspace, WorkspaceMember
@@ -15,6 +15,11 @@ from channels.layers import get_channel_layer
 from realtime.models import Notification
 from rest_framework.parsers import MultiPartParser, FormParser
 import cloudinary.uploader
+
+
+
+
+
 
 
 
@@ -41,6 +46,30 @@ class CreateProjectView(CreateAPIView):
 
     def get_queryset(self):
         return Project.objects.filter(workspace=self.request.current_workspace)
+    
+
+
+class ProjectPermissionMixin:
+    def get_object(self):
+        obj = super().get_object()
+        return obj
+
+class ProjectUpdateView(ProjectPermissionMixin, UpdateAPIView):
+    queryset = Project.objects.all()
+    serializer_class = ProjectSerializer
+    permission_classes = [HasWorkspacePermission]
+    lookup_field = "id"
+    lookup_url_kwarg = "project_id"
+    required_permissions = ['update_project']  
+
+
+class ProjectDeleteView(ProjectPermissionMixin, DestroyAPIView):
+    queryset = Project.objects.all()
+    serializer_class = ProjectSerializer
+    permission_classes = [HasWorkspacePermission]
+    lookup_field = "id"
+    lookup_url_kwarg = "project_id"
+    required_permissions = ['delete_project'] 
 
 
 
@@ -259,32 +288,27 @@ class ActiveSprintIssueListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, project_id):
-        
-        sprint = Sprint.objects.filter(project_id=project_id, is_active=True).first()
-        
-        if not sprint:
+        # Get all active sprints in the project
+        active_sprints = Sprint.objects.filter(project_id=project_id, is_active=True)
+
+        if not active_sprints.exists():
             return Response({
-                "sprint": None,
+                "sprints": [],
                 "issues": []
             })
 
-        issues = Issue.objects.filter(sprint=sprint)
-        print(issues)
+        # Get issues in all active sprints
+        issues = Issue.objects.filter(sprint__in=active_sprints)
+
+        sprint_serializer = SprintSerializer(active_sprints, many=True)
         issue_serializer = IssueSerializer(issues, many=True)
-        sprint_serializer = SprintSerializer(sprint)
 
         return Response({
-            "sprint": sprint_serializer.data,
+            "sprints": sprint_serializer.data,
             "issues": issue_serializer.data
         })
 
 
-from rest_framework.generics import ListCreateAPIView
-from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.response import Response
-from rest_framework import status
-from django.shortcuts import get_object_or_404
-import cloudinary.uploader
 
 class AttachmentListCreateView(ListCreateAPIView):
     serializer_class = AttachmentSerializer
@@ -352,4 +376,16 @@ class AttachmentListCreateView(ListCreateAPIView):
             return Response(self.get_serializer(attachment).data,
                             status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+class AttachmentDeleteView(DestroyAPIView):
+    queryset = Attachment.objects.all()
+    serializer_class = AttachmentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        try:
+            return Attachment.objects.get(pk=self.kwargs['pk'])
+        except Attachment.DoesNotExist:
+            raise NotFound(detail="Attachment not found.")    
 
