@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import CreateProjectView, WorkspaceProjectsAPIView, CreateIssueView, ProjectEpicsView ,ProjectIssuesView, AssignParentEpicView, AssignAssigneeToIssueView, UpdateIssueStatusView, IssueDetailUpdateView,ProjectSprintListCreateView,SprintDetailView,ActiveSprintIssueListView, AttachmentListCreateView, AttachmentDeleteView, ProjectDeleteView,ProjectUpdateView
+from .views import CreateProjectView, WorkspaceProjectsAPIView, CreateIssueView, ProjectEpicsView ,ProjectIssuesView, AssignParentEpicView, AssignAssigneeToIssueView, UpdateIssueStatusView, IssueDetailUpdateView,ProjectSprintListCreateView,SprintDetailView,ActiveSprintIssueListView, AttachmentListCreateView, AttachmentDeleteView, ProjectDeleteView,ProjectUpdateView, SprintIssueStatusView,CompleteSprintAPIView
 
 
 urlpatterns = [
@@ -17,6 +17,8 @@ urlpatterns = [
      path('<int:project_id>/sprints/', ProjectSprintListCreateView.as_view(), name='project-sprint-list-create'),
      path('sprints/<int:pk>/', SprintDetailView.as_view(), name='sprint-detail'),
      path('<int:project_id>/active-sprint-issues/', ActiveSprintIssueListView.as_view(), name='active-sprint-issues'),
+     path("sprints/<int:sprint_id>/issues/", SprintIssueStatusView.as_view(), name="sprint-issue-status"),
+     path('sprints/<int:sprint_id>/complete/', CompleteSprintAPIView.as_view(), name='complete-sprint'),
      path('issues/<int:issue_id>/attachments/', AttachmentListCreateView.as_view(), name='attachment-list-create'),
      path('attachments/<int:pk>/', AttachmentDeleteView.as_view(), name='attachment-delete'),
 ]

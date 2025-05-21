@@ -25,6 +25,7 @@ urlpatterns = [
     path('api/v1/adminpanel/', include('adminpanel.urls')), 
     path('api/v1/workspace/', include('workspace.urls')), 
     path('api/v1/project/', include('project.urls')), 
+    path('api/v1/realtime/', include('realtime.urls')), 
     path('api-auth/v1/', include("rest_framework.urls")),
 
 ]

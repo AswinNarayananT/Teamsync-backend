@@ -187,7 +187,6 @@ class GoogleLoginView(APIView):
             },
             "access_token": str(access),  
             "refresh_token": str(refresh),
-
         }
 
         response = Response(response_data, status=status.HTTP_200_OK)
