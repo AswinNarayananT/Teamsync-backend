@@ -253,29 +253,30 @@ class AssignAssigneeToIssueView(APIView):
             return Response({"error": "Failed to assign assignee."},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        workspace = issue.project.workspace
-        message = f"You've been assigned to issue: {issue.title}"
-        notification = Notification.objects.create(
-            recipient=membership.user,
-            workspace=workspace,
-            message=message
-        )
+        if request.user.id != membership.user_id:
+            workspace = issue.project.workspace
+            message = f"You've been assigned to issue: {issue.title}"
+            notification = Notification.objects.create(
+                recipient=membership.user,
+                workspace=workspace,
+                message=message
+            )
 
-        channel_layer = get_channel_layer()
-        group_name = f"workspace_{workspace.id}_user_{membership.user.id}"
-        async_to_sync(channel_layer.group_send)(
-            group_name,
-            {
-                "type": "send_notification",
-                "content": {
-                    "message": notification.message,
-                    "workspace": {
-                        "id": workspace.id,
-                        "name": workspace.name,
-                    },
+            channel_layer = get_channel_layer()
+            group_name = f"workspace_{workspace.id}_user_{membership.user.id}"
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {
+                    "type": "send_notification",
+                    "content": {
+                        "message": notification.message,
+                        "workspace": {
+                            "id": workspace.id,
+                            "name": workspace.name,
+                        },
+                    }
                 }
-            }
-        )
+            )
 
         return Response(
             {"id": issue_id, "assignee": membership.user_id},

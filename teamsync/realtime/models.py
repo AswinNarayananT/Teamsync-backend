@@ -1,7 +1,7 @@
 from django.db import models
 from accounts.models import Accounts
 from workspace.models import Workspace
-
+import uuid
 # Create your models here.
 
 
@@ -27,3 +27,20 @@ class ChatMessage(models.Model):
 
     class Meta:
         ordering = ['-timestamp']    
+
+
+class Meeting(models.Model):
+    room_id = models.UUIDField(default=uuid.uuid4, unique=True)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE)
+    host = models.ForeignKey(Accounts, on_delete=models.CASCADE, related_name='hosted_meetings')
+    participants = models.ManyToManyField(Accounts, related_name='meetings')
+    start_time = models.DateTimeField()
+    
+    actual_start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def actual_duration(self):
+        if self.actual_start_time and self.end_time:
+            return (self.end_time - self.actual_start_time).total_seconds() / 60
+        return None

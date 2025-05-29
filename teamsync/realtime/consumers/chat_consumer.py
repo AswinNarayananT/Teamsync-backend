@@ -123,6 +123,16 @@ class ChatConsumer(AsyncWebsocketConsumer):
             }
         )
 
+        await self.channel_layer.group_send(
+            f"presence_workspace_{self.workspace_id}",
+            {
+                "type": "presence_read_update",
+                "reader_id": self.user.id,
+                "receiver_id": self.receiver_id,
+                "workspace_id": self.workspace_id,
+            }
+        )
+
     async def read_update_event(self, event):
         await self.send(text_data=json.dumps({
             "type": "read_update",

@@ -15,22 +15,18 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
-        # Fetch all workspace IDs the user belongs to
         self.workspace_ids = await self.get_user_workspace_ids(self.user.id)
 
-        # Define group names for each workspace-user combination
         self.group_names = [
             f"workspace_{workspace_id}_user_{self.user.id}"
             for workspace_id in self.workspace_ids
         ]
 
-        # Add this connection to all relevant groups
         for group_name in self.group_names:
             await self.channel_layer.group_add(group_name, self.channel_name)
 
         await self.accept()
 
-        # Send initial notifications and unread count
         data = await self.fetch_all_workspace_notifications(self.user.id)
         await self.send(json.dumps({
             'type': 'init',
@@ -49,11 +45,10 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             await self.mark_all_as_read(self.user.id)
 
     async def send_notification(self, event):
-        # Receive notification from the group and send to the WebSocket
         await self.send(json.dumps({
             'type': 'new',
             'message': event['content']['message'],
-            'workspace': event['content'].get('workspace'),  # Optional field for frontend display
+            'workspace': event['content'].get('workspace'), 
         }))
 
     @database_sync_to_async
