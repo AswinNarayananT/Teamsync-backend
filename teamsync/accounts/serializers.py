@@ -11,6 +11,8 @@ import redis
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from accounts.models import Accounts
+from rest_framework import serializers
+from project.models import Project, Issue, Sprint
 
 redis_client = redis.StrictRedis(host="localhost", port=6379, db=0, decode_responses=True)
 
@@ -165,3 +167,61 @@ class ResetPasswordSerializer(serializers.Serializer):
         if data["password"] != data["confirm_password"]:
             raise serializers.ValidationError("Passwords do not match.")
         return data
+    
+
+
+class IssueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Issue
+        fields = ['id', 'title', 'type', 'status', 'assignee', 'start_date', 'end_date', 'is_completed']
+
+
+class EpicSerializer(serializers.ModelSerializer):
+    issues = serializers.SerializerMethodField()
+    progress = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Issue
+        fields = ['id', 'title', 'status', 'start_date', 'end_date', 'is_completed', 'issues', 'progress']
+
+    def get_issues(self, obj):
+        children = obj.children.all()
+        return IssueSerializer(children, many=True).data
+
+    def get_progress(self, obj):
+        total = obj.children.count()
+        completed = obj.children.filter(status="done").count()
+        return {
+            "total": total,
+            "completed": completed,
+            "percentage": int((completed / total) * 100) if total > 0 else 0
+        }
+
+
+class ProjectDetailSerializer(serializers.ModelSerializer):
+    issue_counts_by_type = serializers.SerializerMethodField()
+    issue_counts_by_status = serializers.SerializerMethodField()
+    epics = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Project
+        fields = [
+            'id', 'name', 'description', 'start_date', 'end_date', 'is_completed',
+            'issue_counts_by_type', 'issue_counts_by_status', 'epics'
+        ]
+
+    def get_issue_counts_by_type(self, obj):
+        result = {}
+        for type_key, _ in Issue.ISSUE_TYPES:
+            result[type_key] = obj.issues.filter(type=type_key).count()
+        return result
+
+    def get_issue_counts_by_status(self, obj):
+        result = {}
+        for status_key, _ in Issue.STATUS_CHOICES:
+            result[status_key] = obj.issues.filter(status=status_key).count()
+        return result
+
+    def get_epics(self, obj):
+        epics = obj.issues.filter(type="epic")
+        return EpicSerializer(epics, many=True).data

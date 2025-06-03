@@ -10,4 +10,5 @@ websocket_urlpatterns = [
       re_path(r'ws/chat/(?P<workspace_id>\d+)/(?P<receiver_id>\d+)/$', ChatConsumer.as_asgi()),
       re_path(r"ws/online/(?P<workspace_id>\d+)/?$", PresenceConsumer.as_asgi()),
       re_path(r'ws/video-call/$', VideoCallConsumer.as_asgi()),
+      
 ]

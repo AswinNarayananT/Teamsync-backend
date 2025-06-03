@@ -103,7 +103,6 @@ class PresenceConsumer(AsyncWebsocketConsumer):
         }))
 
     async def chat_message_update(self, event):
-        # This function is triggered via group_send to user_{id}
         if self.user.id != event.get("receiver_id"):
             return
 

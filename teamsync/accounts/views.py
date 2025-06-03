@@ -1,6 +1,7 @@
-from .serializers import UserRegisterSerializer,LoginSerializer,ResendOTPSerializer,OTPVerificationSerializer,UserSerializer, UserDetailUpdateSerializer, ForgotPasswordSerializer, ResetPasswordSerializer
+from .serializers import UserRegisterSerializer,LoginSerializer,ResendOTPSerializer,OTPVerificationSerializer,UserSerializer, UserDetailUpdateSerializer, ForgotPasswordSerializer, ResetPasswordSerializer, ProjectDetailSerializer
 from rest_framework_simplejwt.exceptions import TokenError as SimpleJWTTokenError, ExpiredTokenError
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework.generics import RetrieveAPIView, UpdateAPIView
 from rest_framework.permissions import AllowAny,IsAuthenticated
 from django.contrib.auth.tokens import default_token_generator
 from .tasks import send_otp_email, send_password_reset_email
@@ -13,12 +14,13 @@ from django.utils.encoding import force_bytes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils.timezone import now
-from rest_framework import generics
+from project.models import Project
 from rest_framework import status
 from django.conf import settings
 from datetime import timedelta
 from .models import Accounts
 import requests
+
 
 
 
@@ -244,7 +246,7 @@ class SaveProfileImagesView(APIView):
 
 
 
-class UserDetailUpdateView(generics.UpdateAPIView):
+class UserDetailUpdateView(UpdateAPIView):
     serializer_class = UserDetailUpdateSerializer
     permission_classes = [IsAuthenticated]
 
@@ -327,3 +329,11 @@ class ResetPasswordView(APIView):
         user.save()
 
         return Response({"message": "Password has been reset successfully."}, status=200)    
+    
+
+
+class ProjectDetailView(RetrieveAPIView):
+    queryset = Project.objects.all()
+    serializer_class = ProjectDetailSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'id' 

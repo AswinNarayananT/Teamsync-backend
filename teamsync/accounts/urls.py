@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RegisterView,LoginView,VerifyOTPView,ResendOTPView,ProtectedUserView,GoogleLoginView,LogoutView,SaveProfileImagesView,UserDetailUpdateView,ChangePasswordView, ForgotPasswordView, ResetPasswordView
+from .views import RegisterView,LoginView,VerifyOTPView,ResendOTPView,ProtectedUserView,GoogleLoginView,LogoutView,SaveProfileImagesView,UserDetailUpdateView,ChangePasswordView, ForgotPasswordView, ResetPasswordView, ProjectDetailView
 
 
 urlpatterns = [
@@ -15,5 +15,6 @@ urlpatterns = [
     path('forgot-password/', ForgotPasswordView.as_view(), name='forgot-password'),
     path('reset-password/<uidb64>/<token>/', ResetPasswordView.as_view(), name='reset-password'),
     path('logout/', LogoutView.as_view(), name="logout"),
+    path('dashboard/projects/<int:id>/', ProjectDetailView.as_view(), name='project-detail'),
 
 ]
