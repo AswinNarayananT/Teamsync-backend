@@ -216,7 +216,7 @@ EMAIL_HOST_USER = config("EMAIL_HOST_USER")
 SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = config("SOCIAL_AUTH_GOOGLE_OAUTH2_KEY")
 SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = config("SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET")
 
-FRONTEND_URL ='http://localhost:5173'
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
