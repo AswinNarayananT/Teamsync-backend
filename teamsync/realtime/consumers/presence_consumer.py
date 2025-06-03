@@ -79,19 +79,17 @@ class PresenceConsumer(AsyncWebsocketConsumer):
             if sender_id:
                 await self.mark_messages_as_read(sender_id)
 
-                # Send updated unread summary to receiver (self)
                 summary = await self.get_unread_summary_with_last_message()
                 await self.send(text_data=json.dumps({
                     "type": "unread_summary",
                     "data": summary,
                 }))
 
-                # Notify sender's WebSocket to refresh summary
                 await self.channel_layer.group_send(
                     f"user_{sender_id}",
                     {
                         "type": "chat_message_update",
-                        "receiver_id": sender_id,  # This is required by handler
+                        "receiver_id": sender_id, 
                     }
                 )
 
