@@ -12,10 +12,9 @@ from workspace.serializers import WorkspaceSerializer
 from workspace.models import Workspace
 from django.utils.timezone import now
 from django.db.models import Count, Sum, Q, F
-import datetime 
 import stripe
 from rest_framework.permissions import IsAdminUser
-
+from datetime import datetime
 
 
 
@@ -148,7 +147,11 @@ class PlanAdminStatsAPIView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        today = now()
+
+
+
+        today = datetime.now()
+
         data = []
 
         plans = Plan.objects.filter(is_active=True)
@@ -167,7 +170,7 @@ class PlanAdminStatsAPIView(APIView):
 
             plan_subscriptions = [
                 sub for sub in stripe_subscriptions.auto_paging_iter()
-                if any(item.price.id == plan.stripe_price_id for item in sub.items.data)
+                if any(item.price.id == plan.stripe_price_id for item in sub['items']['data'])
             ]
 
             active_sub_count = sum(1 for sub in plan_subscriptions if sub.status == "active")
@@ -190,7 +193,7 @@ class PlanAdminStatsAPIView(APIView):
                 if pi_obj.status == 'succeeded' and pi_obj.amount_received:
                     amount = pi_obj.amount_received
                     total_revenue_cents += amount
-                    created_dt = datetime.datetime.fromtimestamp(pi_obj.created)
+                    created_dt = datetime.fromtimestamp(pi_obj.created)
                     delta = today - created_dt.replace(tzinfo=None)
                     if delta.days <= 7:
                         weekly_revenue_cents += amount

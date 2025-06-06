@@ -94,7 +94,7 @@ class LoginView(APIView):
                 httponly=True,
                 secure=True, 
                 samesite="None",  
-                expires=now() + timedelta(minutes=1),
+                expires=now() + timedelta(minutes=15),
             )
 
             return response
