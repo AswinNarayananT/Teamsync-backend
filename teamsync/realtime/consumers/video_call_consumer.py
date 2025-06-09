@@ -1,8 +1,7 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
-from channels.db import database_sync_to_async
-from django.contrib.auth.models import User
 import json
 import logging
+
 logger = logging.getLogger(__name__)
 
 class VideoCallConsumer(AsyncWebsocketConsumer):
@@ -21,11 +20,9 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
         logger.info(f"User {self.user} connected to group {self.group_name}")
 
     async def disconnect(self, close_code):
-        user_str = getattr(self, 'user', None)
-        group_name = getattr(self, 'group_name', None)
-        logger.info(f"Disconnecting user {user_str} from group {group_name}")
-        if group_name:
-            await self.channel_layer.group_discard(group_name, self.channel_name)
+        logger.info(f"Disconnecting user {self.user} from group {self.group_name}")
+        if self.group_name:
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     async def receive(self, text_data):
         data = json.loads(text_data)
@@ -42,13 +39,13 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_send(
                 f'user_{to_user_id}',
                 {
-                    'type': 'send_call_invite',
+                    'type': 'send_call_invite', 
                     'call_data': call_data,
                 }
             )
 
-        elif action == 'missed_call':
-            pass
-
     async def send_call_invite(self, event):
         await self.send(text_data=json.dumps(event['call_data']))
+
+    async def chat_message_update(self, event):
+        pass

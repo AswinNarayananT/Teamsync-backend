@@ -5,6 +5,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.contrib.auth import get_user_model
 from realtime.models import ChatMessage
 from django.db.models import Count, Q
+from realtime.utils import get_online_users_in_workspace
 
 User = get_user_model()
 
@@ -22,12 +23,24 @@ class PresenceConsumer(AsyncWebsocketConsumer):
 
         self.group_name = f"workspace_{self.workspace_id}_online"
         self.user_group = f"user_{self.user.id}"
+        self.presence_group = f"presence_workspace_{self.workspace_id}"
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.channel_layer.group_add(self.user_group, self.channel_name)
+        await self.channel_layer.group_add(self.presence_group, self.channel_name)
         await self.accept()
 
         await self.add_user_to_cache()
+
+        online_users = await self.get_online_users_in_workspace()
+
+        for uid in online_users:
+            if str(uid) != str(self.user.id):
+                await self.send(text_data=json.dumps({
+                    "type": "presence",
+                    "user_id": uid,
+                    "status": "online",
+                }))
 
         await self.channel_layer.group_send(
             self.group_name,
@@ -37,6 +50,7 @@ class PresenceConsumer(AsyncWebsocketConsumer):
                 "status": "online",
             },
         )
+
 
     async def disconnect(self, close_code):
         if hasattr(self, "workspace_id"):
@@ -52,6 +66,7 @@ class PresenceConsumer(AsyncWebsocketConsumer):
             )
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
             await self.channel_layer.group_discard(self.user_group, self.channel_name)
+            await self.channel_layer.group_discard(self.presence_group, self.channel_name)
 
     async def receive(self, text_data):
         data = json.loads(text_data)
@@ -74,24 +89,6 @@ class PresenceConsumer(AsyncWebsocketConsumer):
                 "data": summary,
             }))
 
-        elif data.get("type") == "mark_read":
-            sender_id = data.get("sender_id")
-            if sender_id:
-                await self.mark_messages_as_read(sender_id)
-
-                summary = await self.get_unread_summary_with_last_message()
-                await self.send(text_data=json.dumps({
-                    "type": "unread_summary",
-                    "data": summary,
-                }))
-
-                await self.channel_layer.group_send(
-                    f"user_{sender_id}",
-                    {
-                        "type": "chat_message_update",
-                        "receiver_id": sender_id, 
-                    }
-                )
 
     async def user_status(self, event):
         await self.send(text_data=json.dumps({
@@ -140,7 +137,7 @@ class PresenceConsumer(AsyncWebsocketConsumer):
             workspace_id=self.workspace_id
         ).filter(
             Q(sender=self.user) | Q(receiver=self.user)
-        ).order_by('-timestamp')
+        ).select_related('sender', 'receiver').order_by('-timestamp')
 
         latest_msgs = {}
 
@@ -155,7 +152,7 @@ class PresenceConsumer(AsyncWebsocketConsumer):
             if other.id not in latest_msgs:
                 latest_msgs[other.id] = {
                     'user_id': other.id,
-                    'username': other.first_name,
+                    'username': getattr(other, 'first_name', '') or getattr(other, 'username', ''),
                     'message': msg.text,
                     'timestamp': msg.timestamp.isoformat(),
                     'from_self': from_self,
@@ -174,13 +171,21 @@ class PresenceConsumer(AsyncWebsocketConsumer):
             msg_data['unread_count'] = unread_count.get(user_id, 0)
             result.append(msg_data)
 
+        result.sort(key=lambda x: x['timestamp'], reverse=True)
+
         return result
 
     @database_sync_to_async
     def mark_messages_as_read(self, sender_id):
-        ChatMessage.objects.filter(
+        updated_count = ChatMessage.objects.filter(
             sender_id=sender_id,
             receiver=self.user,
             workspace_id=self.workspace_id,
             is_read=False
         ).update(is_read=True)
+        return updated_count
+    
+    @database_sync_to_async
+    def get_online_users_in_workspace(self):
+        from realtime.utils import get_online_users_in_workspace
+        return get_online_users_in_workspace(self.workspace_id)

@@ -19,3 +19,6 @@ def is_user_online_in_workspace(workspace_id, user_id):
     return str(user_id) in map(str, online_users)
 
 
+def get_online_users_in_workspace(workspace_id):
+    key = f"workspace_{workspace_id}_online_users"
+    return cache.get(key, [])
