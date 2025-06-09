@@ -204,7 +204,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             workspace_id=self.workspace_id,
             sender_id__in=[self.user.id, self.receiver_id],
             receiver_id__in=[self.user.id, self.receiver_id],
-        ).order_by("timestamp")[50:]
+        ).order_by("timestamp")
 
         return [
             {

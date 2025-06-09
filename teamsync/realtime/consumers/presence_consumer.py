@@ -90,6 +90,7 @@ class PresenceConsumer(AsyncWebsocketConsumer):
             }))
 
 
+
     async def user_status(self, event):
         await self.send(text_data=json.dumps({
             "type": "presence",
