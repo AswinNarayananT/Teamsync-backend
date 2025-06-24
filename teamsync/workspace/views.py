@@ -201,27 +201,36 @@ class WorkspaceMembersListView(APIView):
 
 
 class WorkspaceSubscriptionUpdateView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        print("🔥 GET METHOD CALLED")
+        return Response({"message": "GET method works, view is accessible"}, status=200)
 
     def post(self, request, *args, **kwargs):
+        print("🔥 POST METHOD CALLED - View is working!")
+
         user = request.user
         workspace_id = request.data.get("workspace_id")
         plan_id = request.data.get("plan_id")
 
         if not workspace_id or not plan_id:
+            print("❌ Missing workspace_id or plan_id")
             return Response({"error": "workspace_id and plan_id are required"}, status=400)
 
         try:
             workspace = Workspace.objects.get(id=workspace_id, owner=user)
         except Workspace.DoesNotExist:
+            print("❌ Workspace not found or user not owner")
             return Response({"error": "Workspace not found or permission denied"}, status=404)
 
         try:
             plan = Plan.objects.get(id=plan_id)
         except Plan.DoesNotExist:
+            print("❌ Invalid plan ID")
             return Response({"error": "Invalid Plan ID"}, status=400)
 
         try:
+            print("✅ Creating Stripe checkout session...")
             checkout_session = stripe.checkout.Session.create(
                 payment_method_types=["card"],
                 mode="subscription",
@@ -233,7 +242,7 @@ class WorkspaceSubscriptionUpdateView(APIView):
                     }
                 ],
                 success_url=f"{settings.FRONTEND_URL}/dashboard?session_id={{CHECKOUT_SESSION_ID}}",
-                cancel_url=f"{settings.FRONTEND_URL}/subscription-renewal",
+                cancel_url=f"{settings.FRONTEND_URL}/subscription/update",
                 metadata={
                     "action": "update",
                     "workspace_id": workspace.id,
@@ -241,6 +250,9 @@ class WorkspaceSubscriptionUpdateView(APIView):
                     "plan_id": plan.id,
                 },
             )
+
+            print("✅ Stripe session created:", checkout_session.id)
+
             return Response({
                 "message": "Stripe session created for subscription update",
                 "session_id": checkout_session.id,
@@ -248,6 +260,7 @@ class WorkspaceSubscriptionUpdateView(APIView):
             }, status=status.HTTP_200_OK)
 
         except stripe.error.StripeError as e:
+            print("❌ Stripe error:", e)
             return Response({"error": f"Stripe error: {str(e)}"}, status=400)
         
 
@@ -309,7 +322,8 @@ class WorkspaceStatusView(APIView):
 
             return Response({
                 "id": str(workspace.id),
-                "is_active": workspace.is_active
+                "is_active": workspace.is_active,
+                "is_blocked_by_admin": workspace.is_blocked_by_admin, 
             }, status=status.HTTP_200_OK)
 
         except Workspace.DoesNotExist:

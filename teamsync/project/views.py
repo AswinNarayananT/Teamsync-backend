@@ -1,8 +1,8 @@
 from rest_framework.generics import CreateAPIView,  RetrieveAPIView, RetrieveUpdateAPIView,RetrieveUpdateDestroyAPIView, ListCreateAPIView, DestroyAPIView, UpdateAPIView
 from rest_framework.views import APIView 
 from .models import Project, Issue, Sprint, Attachment
-from workspace.models import Workspace, WorkspaceMember
-from .serializers import ProjectSerializer, IssueSerializer, IssueCreateSerializer, SprintSerializer, AttachmentSerializer
+from workspace.models import Workspace, WorkspaceMember, CustomRole
+from .serializers import ProjectSerializer, IssueSerializer, IssueCreateSerializer, SprintSerializer, AttachmentSerializer, SprintWithIssuesSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
@@ -18,6 +18,18 @@ from django.db import transaction
 import cloudinary.uploader
 from django.db.models import Q
 
+
+class CompletedSprintsWithIssuesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, project_id):
+        completed_sprints = Sprint.objects.filter(
+            project_id=project_id,
+            is_completed=True
+        ).prefetch_related('issues', 'issues__assignee')  # optimize DB access
+
+        serializer = SprintWithIssuesSerializer(completed_sprints, many=True)
+        return Response(serializer.data)
 
 # Create your views here.
 
@@ -286,7 +298,7 @@ class AssignAssigneeToIssueView(APIView):
 
 
 class UpdateIssueStatusView(APIView):
-    permission_classes = [IsAuthenticated]  
+    permission_classes = [IsAuthenticated]
 
     def patch(self, request, *args, **kwargs):
         issue_id = kwargs.get("issue_id")
@@ -296,17 +308,64 @@ class UpdateIssueStatusView(APIView):
             return Response({"error": "Invalid status value."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            issue = Issue.objects.get(id=issue_id)
+            issue = Issue.objects.select_related("project__workspace", "assignee").get(id=issue_id)
         except Issue.DoesNotExist:
             return Response({"error": "Issue not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        current_workspace = issue.project.workspace
+
+        try:
+            member = WorkspaceMember.objects.get(workspace=current_workspace, user=request.user)
+        except WorkspaceMember.DoesNotExist:
+            return Response({"error": "You are not a member of this workspace."}, status=status.HTTP_403_FORBIDDEN)
+
+        role = member.role
+
+        if role in ["owner", "manager"]:
+            issue.status = new_status
+            issue.save()
+            return Response({"issue_id": issue.id, "status": issue.status}, status=status.HTTP_200_OK)
+
+        has_permission = False
+
+        default_role_permissions = {
+            "developer": ["update_status"],
+            "designer": ["update_status"],
+        }
+
+        if role in default_role_permissions:
+            has_permission = "update_status" in default_role_permissions[role]
+        else:
+            try:
+                custom_role = CustomRole.objects.get(workspace=current_workspace, name=role)
+                has_permission = "update_status" in custom_role.permissions
+            except CustomRole.DoesNotExist:
+                has_permission = False
+
+        if not has_permission:
+            return Response({"error": "You don't have permission to update status."}, status=status.HTTP_403_FORBIDDEN)
+
+        if issue.assignee != request.user:
+            return Response({"error": "You can only update status of issues assigned to you."}, status=status.HTTP_403_FORBIDDEN)
+
         issue.status = new_status
         issue.save()
-
         return Response({"issue_id": issue.id, "status": issue.status}, status=status.HTTP_200_OK)
+    
 
+class DeleteIssueView(DestroyAPIView):
+    queryset = Issue.objects.all()
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'pk'
 
-
+    def delete(self, request, *args, **kwargs):
+        try:
+            issue = self.get_object()
+            issue_id = issue.id
+            issue.delete()
+            return Response({"id": issue_id, "detail": "Issue deleted successfully."}, status=status.HTTP_200_OK)
+        except Issue.DoesNotExist:
+            return Response({"error": "Issue not found."}, status=status.HTTP_404_NOT_FOUND)
 
 class ProjectSprintListCreateView(ListCreateAPIView):
     permission_classes = [IsAuthenticated]
@@ -517,7 +576,10 @@ class SprintIssueStatusView(APIView):
 
 
 class CompleteSprintAPIView(APIView):
-    def post(self, request, sprint_id):
+    permission_classes = [IsAuthenticated,HasWorkspacePermission]
+    required_permissions = ["complete_sprint"] 
+
+    def post(self, request,project_id, sprint_id):
         try:
             sprint = Sprint.objects.get(id=sprint_id, is_active=True, is_completed=False)
         except Sprint.DoesNotExist:
@@ -530,7 +592,7 @@ class CompleteSprintAPIView(APIView):
 
         Issue.objects.filter(sprint=sprint, status="done").update(is_completed=True)
 
-        incomplete_issues = issues.exclude(status="Done")
+        incomplete_issues = issues.exclude(status="done")
 
         new_sprint = None
 

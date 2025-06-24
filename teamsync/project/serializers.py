@@ -99,3 +99,19 @@ class SprintSerializer(serializers.ModelSerializer):
         model = Sprint
         fields = '__all__'
         read_only_fields = ('project', 'number', 'name')
+
+
+
+class SprintWithIssuesSerializer(serializers.ModelSerializer):
+    issues = IssueSerializer(many=True, read_only=True)  
+
+    class Meta:
+        model = Sprint
+        fields = (
+            'id', 'name', 'goal', 'number',
+            'start_date', 'end_date',
+            'is_active', 'is_completed',
+            'created_at', 'updated_at',
+            'issues'
+        )
+

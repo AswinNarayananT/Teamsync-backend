@@ -24,8 +24,8 @@ class HasWorkspacePermission(BasePermission):
 
         default_role_permissions = {
             "owner": ["*"],
-            "manager": ["create_project","create_epic", "start_sprint", "invite_members"],
-            "developer": ["update_status", "view_board"],
+            "manager": ["create_project","create_epic", "start_sprint","update_status"],
+            "developer": ["update_status"],
             "designer": ["update_status"],
         }
 

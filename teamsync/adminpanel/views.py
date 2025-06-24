@@ -8,7 +8,7 @@ from .serializers import PlanSerializer
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from workspace.serializers import WorkspaceSerializer
+from .serializers import WorkspaceSerializer
 from workspace.models import Workspace
 from django.utils.timezone import now
 from django.db.models import Count, Sum, Q, F
@@ -139,6 +139,23 @@ class AdminWorkspaceListView(generics.ListAPIView):
     queryset = Workspace.objects.all()
     serializer_class = WorkspaceSerializer
     permission_classes = [permissions.IsAdminUser]
+
+
+
+class ToggleBlockWorkspaceView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, pk):
+        try:
+            workspace = Workspace.objects.get(pk=pk)
+            if workspace.is_blocked_by_admin:
+                workspace.unblock_by_admin()
+                return Response({"detail": "Workspace unblocked", "is_blocked_by_admin": False})
+            else:
+                workspace.block_by_admin()
+                return Response({"detail": "Workspace blocked", "is_blocked_by_admin": True})
+        except Workspace.DoesNotExist:
+            return Response({"error": "Workspace not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 

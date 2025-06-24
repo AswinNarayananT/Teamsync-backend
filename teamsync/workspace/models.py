@@ -44,9 +44,6 @@ class Workspace(models.Model):
         if self.plan and not self.plan_expiry:
             self.plan_expiry = now() + timedelta(days=self.plan.duration_days)
             self.is_active = True 
-
-        if self.is_blocked_by_admin:  
-            self.is_active = False
         
         super().save(*args, **kwargs)
 
@@ -59,12 +56,10 @@ class Workspace(models.Model):
 
     def block_by_admin(self):
         self.is_blocked_by_admin = True
-        self.is_active = False
         self.save()
 
     def unblock_by_admin(self):
         self.is_blocked_by_admin = False
-        self.is_active = self.is_plan_active() 
         self.save()
 
     def __str__(self):
