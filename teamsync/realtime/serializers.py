@@ -26,11 +26,28 @@ class MeetingSerializer(serializers.ModelSerializer):
         meeting.participants.set(participants)
         return meeting
 
+class ParticipantSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
 
+    class Meta:
+        model = Accounts
+        fields = ['email', 'full_name']
+
+    def get_full_name(self, obj):
+        first = obj.first_name or ""
+        last = obj.last_name or ""
+        return f"{first} {last}".strip()
+    
 class MeetingListSerializer(serializers.ModelSerializer):
     workspace_name = serializers.CharField(source='workspace.name', read_only=True)
-    host_name = serializers.CharField(source='host.full_name', read_only=True)
+    host_name = serializers.SerializerMethodField()
+    participants = ParticipantSerializer(many=True, read_only=True)
 
     class Meta:
         model = Meeting
-        fields = ['id', 'room_id', 'start_time', 'end_time', 'workspace_name', 'host_name']
+        fields = ['id', 'room_id', 'start_time', 'end_time', 'workspace_name', 'host_name', 'participants']
+
+    def get_host_name(self, obj):
+        first = obj.host.first_name or ""
+        last = obj.host.last_name or ""
+        return f"{first} {last}".strip()

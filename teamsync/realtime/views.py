@@ -44,7 +44,6 @@ class ChatMessageListView(ListAPIView):
             Q(sender_id=self.receiver_id, receiver=user)
         ).order_by('timestamp')
 
-        # Mark unread messages received by the current user as read
         unread = messages.filter(receiver=user, is_read=False)
         self.unread_message_ids = list(unread.values_list('id', flat=True))
         unread.update(is_read=True)
@@ -103,7 +102,7 @@ class CreateMeetingView(CreateAPIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        notify_at = meeting.start_time - timedelta(minutes=2)
+        notify_at = meeting.start_time - timedelta(minutes=10)
         if notify_at > timezone.now():
             send_meeting_notification.apply_async((meeting.id,), eta=notify_at)
 
