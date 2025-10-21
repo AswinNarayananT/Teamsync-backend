@@ -43,8 +43,45 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
                     'call_data': call_data,
                 }
             )
+        elif action == 'accept_call':
+            room_id = data['room_id']
+            # Extract caller ID from room_id (format: callerId_receiverId_timestamp)
+            caller_id = room_id.split('_')[0]
+            # Notify the caller that the call was accepted
+            call_data = {
+                'action': 'call_accepted',
+                'room_id': room_id,
+                'accepted_by': self.user.id,
+            }
+            await self.channel_layer.group_send(
+                f'user_{caller_id}',
+                {
+                    'type': 'send_call_response',
+                    'call_data': call_data,
+                }
+            )
+        elif action == 'reject_call':
+            room_id = data['room_id']
+            # Extract caller ID from room_id (format: callerId_receiverId_timestamp)
+            caller_id = room_id.split('_')[0]
+            # Notify the caller that the call was rejected
+            call_data = {
+                'action': 'call_rejected',
+                'room_id': room_id,
+                'rejected_by': self.user.id,
+            }
+            await self.channel_layer.group_send(
+                f'user_{caller_id}',
+                {
+                    'type': 'send_call_response',
+                    'call_data': call_data,
+                }
+            )
 
     async def send_call_invite(self, event):
+        await self.send(text_data=json.dumps(event['call_data']))
+
+    async def send_call_response(self, event):
         await self.send(text_data=json.dumps(event['call_data']))
 
     async def chat_message_update(self, event):

@@ -37,7 +37,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.update_unread_summary_for_user(self.user.id)
             await self.update_unread_summary_for_user(self.receiver_id)
 
-        await self.send_previous_messages()
+        await self.send_previous_messages(offset=0, limit=20)
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
@@ -53,8 +53,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             message_ids = data.get("message_ids", [])
             await self.mark_messages_read(message_ids)
         elif message_type == "fetch_history":
+            offset = data.get("offset", 0)
+            limit = data.get("limit", 20)
             await self.mark_messages_delivered()
-            await self.send_previous_messages()
+            await self.send_previous_messages(offset=offset, limit=limit)
 
     async def handle_chat_message(self, data):
         text = data.get("text", "").strip()
@@ -68,6 +70,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             text=text
         )
 
+        # Send message to the room group (both sender and receiver are in this group)
         await self.channel_layer.group_send(
             self.room_group_name,
             {
@@ -116,11 +119,18 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def chat_message_update(self, event):
         await self.update_unread_summary_for_user(self.user.id)
     
-    async def send_previous_messages(self):
-        messages = await self.get_chat_history()
+    async def send_previous_messages(self, offset=0, limit=20):
+        messages = await self.get_chat_history(offset=offset, limit=limit)
+        total_count = await self.get_total_message_count()
+        has_more = (offset + limit) < total_count
+        
         await self.send(text_data=json.dumps({
             "type": "chat_history",
-            "messages": messages
+            "messages": messages,
+            "offset": offset,
+            "limit": limit,
+            "has_more": has_more,
+            "total_count": total_count
         }))
 
     async def mark_messages_delivered(self):
@@ -199,12 +209,27 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         }
 
     @database_sync_to_async
-    def get_chat_history(self):
+    def get_chat_history(self, offset=0, limit=20):
+        # Get total count first
+        total_count = ChatMessage.objects.filter(
+            workspace_id=self.workspace_id,
+            sender_id__in=[self.user.id, self.receiver_id],
+            receiver_id__in=[self.user.id, self.receiver_id],
+        ).count()
+        
+        if offset == 0:
+            # Initial load: get the last 20 messages (newest at bottom)
+            start_offset = max(0, total_count - limit)
+        else:
+            # Load more: get older messages above current ones
+            # offset represents how many messages we've already loaded
+            start_offset = max(0, total_count - limit - offset)
+        
         qs = ChatMessage.objects.filter(
             workspace_id=self.workspace_id,
             sender_id__in=[self.user.id, self.receiver_id],
             receiver_id__in=[self.user.id, self.receiver_id],
-        ).order_by("timestamp")
+        ).order_by("timestamp")[start_offset:start_offset + limit]
 
         return [
             {
@@ -217,6 +242,14 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "is_delivered": msg.is_delivered,
             } for msg in qs
         ]
+
+    @database_sync_to_async
+    def get_total_message_count(self):
+        return ChatMessage.objects.filter(
+            workspace_id=self.workspace_id,
+            sender_id__in=[self.user.id, self.receiver_id],
+            receiver_id__in=[self.user.id, self.receiver_id],
+        ).count()
 
     @database_sync_to_async
     def set_delivered(self, sender_id, receiver_id, workspace_id):

@@ -99,6 +99,10 @@ class CreateMeetingView(CreateAPIView):
 
         try:
             meeting = serializer.save(host=request.user, workspace=workspace)
+            
+            # Automatically add the meeting creator to participants
+            meeting.participants.add(request.user)
+            
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -121,6 +125,24 @@ class UpcomingMeetingsView(APIView):
             workspace_id=workspace_id,
             start_time__gt=now
         ).order_by('start_time')
+
+        serializer = MeetingListSerializer(meetings, many=True)
+        return Response(serializer.data)
+
+
+class RecentMeetingsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, workspace_id):
+        user = request.user
+        now = timezone.now()
+
+        # Get meetings where user was a participant and the meeting has ended
+        meetings = Meeting.objects.filter(
+            participants=user,
+            workspace_id=workspace_id,
+            start_time__lt=now  # Meeting has started
+        ).order_by('-start_time')
 
         serializer = MeetingListSerializer(meetings, many=True)
         return Response(serializer.data)

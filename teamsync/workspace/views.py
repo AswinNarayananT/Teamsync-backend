@@ -57,7 +57,7 @@ class WorkspaceCreateView(generics.CreateAPIView):
         if Workspace.objects.filter(owner=user).exists():
             raise ValueError("User already owns a workspace")
 
-        plan_id = data.get("plan_id")
+        plan_id = data.get("plan_id") 
         workspace_name = data.get("name")
         workspace_type = data.get("workspace_type", "individual")
         work_type = data.get("work_type", "software_development")

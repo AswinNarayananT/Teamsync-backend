@@ -21,7 +21,7 @@ class PresenceConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
-        self.group_name = f"workspace_{self.workspace_id}_online"
+        self.group_name = f"presence_workspace_{self.workspace_id}"
         self.user_group = f"user_{self.user.id}"
         self.presence_group = f"presence_workspace_{self.workspace_id}"
 
