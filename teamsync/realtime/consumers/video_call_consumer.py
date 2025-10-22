@@ -8,19 +8,16 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.user = self.scope.get('user', None)
         self.group_name = None
-        logger.info(f"Connecting user: {self.user}")
         if not self.user or not self.user.is_authenticated:
-            logger.warning("Unauthenticated user tried to connect")
+            logger.warning("Unauthenticated user tried to connect to video call consumer")
             await self.close()
             return
 
-        self.group_name = f'user_{self.user.id}'
+        self.group_name = f'video_user_{self.user.id}'
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
-        logger.info(f"User {self.user} connected to group {self.group_name}")
 
     async def disconnect(self, close_code):
-        logger.info(f"Disconnecting user {self.user} from group {self.group_name}")
         if self.group_name:
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
@@ -37,7 +34,7 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
                 'room_id': data['room_id'],
             }
             await self.channel_layer.group_send(
-                f'user_{to_user_id}',
+                f'video_user_{to_user_id}',
                 {
                     'type': 'send_call_invite', 
                     'call_data': call_data,
@@ -54,7 +51,7 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
                 'accepted_by': self.user.id,
             }
             await self.channel_layer.group_send(
-                f'user_{caller_id}',
+                f'video_user_{caller_id}',
                 {
                     'type': 'send_call_response',
                     'call_data': call_data,
@@ -71,7 +68,24 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
                 'rejected_by': self.user.id,
             }
             await self.channel_layer.group_send(
-                f'user_{caller_id}',
+                f'video_user_{caller_id}',
+                {
+                    'type': 'send_call_response',
+                    'call_data': call_data,
+                }
+            )
+        elif action == 'cancel_call':
+            room_id = data['room_id']
+            # Extract receiver ID from room_id (format: callerId_receiverId_timestamp)
+            receiver_id = room_id.split('_')[1]
+            # Notify the receiver that the call was cancelled
+            call_data = {
+                'action': 'call_cancelled',
+                'room_id': room_id,
+                'cancelled_by': self.user.id,
+            }
+            await self.channel_layer.group_send(
+                f'video_user_{receiver_id}',
                 {
                     'type': 'send_call_response',
                     'call_data': call_data,
