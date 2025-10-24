@@ -58,7 +58,7 @@
 - **State Management:** Redux Toolkit + Redux Persist
 - **Authentication:** JWT (Access & Refresh tokens)
 - **Payments:** Stripe
-- **Backend (Connected):** Django + DRF
+- **Backend:** Django + DRF
 - **Database:** PostgreSQL
 - **Real-Time:** WebSocket-based Chat & Video (via WebRTC/Socket.io)
 - **Deployment:** Vercel / Netlify (Frontend) + Render / Railway (Backend)
@@ -67,31 +67,121 @@
 
 ## 🧪 Getting Started
 
+### Backend Setup
+
 ```bash
 # Clone the repo
 git clone https://github.com/your-username/team-sync.git
 
+# Move into the backend directory
+cd team-sync/backend
+
+# Create and activate a virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# On Windows:
+venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
+
 # Install dependencies
-cd team-sync
-npm install
+pip install -r requirements.txt
+
+# Copy the sample environment file and update it
+cp .env.sample .env
+
+# Apply migrations
+python manage.py migrate
 
 # Run the development server
+python manage.py runserver
+```
+
+### Frontend Setup
+
+```bash
+# Move into the frontend directory
+cd team-sync/frontend
+
+# Install dependencies
+npm install
+
+# Start the development server
 npm run dev
 ```
 
-Visit: [http://localhost:5173](http://localhost:5173)
+---
+
+## ⚙️ Environment Configuration
+
+Create a `.env` file in the backend directory with the following variables:
+
+```env
+# ===============================
+# EMAIL SETTINGS
+# ===============================
+EMAIL_HOST_USER=your_email@example.com
+EMAIL_HOST_PASSWORD=your_email_password
+DEFAULT_FROM_EMAIL=your_email@example.com
+
+# ===============================
+# DATABASE SETTINGS
+# ===============================
+DB_NAME=your_db_name
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+DB_HOST=localhost
+DB_PORT=5432
+
+# ===============================
+# DJANGO SETTINGS
+# ===============================
+SECRET_KEY=your_django_secret_key
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+# ===============================
+# CORS SETTINGS
+# ===============================
+CORS_ALLOW_ALL_ORIGINS=False
+CORS_ALLOWED_ORIGINS=http://localhost:5173
+CSRF_TRUSTED_ORIGINS=http://localhost:5173
+FRONTEND_URL=http://localhost:5173
+
+# ===============================
+# SOCIAL AUTH (Google OAuth)
+# ===============================
+SOCIAL_AUTH_GOOGLE_OAUTH2_KEY=your_google_client_id
+SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET=your_google_client_secret
+
+# ===============================
+# STRIPE SETTINGS
+# ===============================
+STRIPE_SECRET_KEY=your_stripe_secret_key
+STRIPE_PUBLIC_KEY=your_stripe_public_key
+STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
+
+# ===============================
+# CLOUDINARY SETTINGS
+# ===============================
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_cloud_api_key
+CLOUDINARY_API_SECRET=your_cloud_api_secret
+CLOUDINARY_URL=your_cloudinary_url
+```
 
 ---
 
-## 🧱 Backend Summary (API)
+## 🧱 Backend API Summary
 
-- Django + DRF backend
-- API endpoints for:
-  - User registration, login, logout
-  - Workspace, Project, Epic, Story CRUD
-  - Sprint start/completion logic
-  - Chat and video management
-  - Stripe webhook integration
+The Django + DRF backend provides API endpoints for:
+
+- User registration, login, logout
+- Workspace, Project, Epic, Story CRUD operations
+- Sprint start/completion logic
+- Chat and video management
+- Stripe webhook integration
 
 ---
 
@@ -115,5 +205,14 @@ This project is open-source under the [MIT License](LICENSE).
 Built with ❤️ by **Aswin Narayanan**  
 BSc Mathematics graduate turned self-taught full-stack developer. Passionate about problem-solving, scalable systems, and building tools that help teams collaborate better.
 
-[LinkedIn](www.linkedin.com/in/aswin-nt/) •  [Email](aswinmalamakkavu@gmail.com)
+[LinkedIn](https://www.linkedin.com/in/aswin-nt/) • [Email](mailto:aswinmalamakkavu@gmail.com)
 
+---
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/your-username/team-sync/issues).
+
+## ⭐ Show Your Support
+
+Give a ⭐️ if this project helped you!
